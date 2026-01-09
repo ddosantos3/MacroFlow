@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE/editor
+.vscode/
+
+# Mac/Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
