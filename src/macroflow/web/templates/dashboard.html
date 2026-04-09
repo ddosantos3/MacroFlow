@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="ambient ambient-left"></div>
+<div class="ambient ambient-right"></div>
+
+<div class="app-shell">
+  <aside class="sidebar panel">
+    <div class="brand">
+      <div class="brand-mark">MF</div>
+      <div>
+        <p class="eyebrow">Trading Intelligence</p>
+        <h1>{{ app_name }}</h1>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <p class="section-label">Painéis</p>
+      <button class="nav-pill active">Command Center</button>
+      <button class="nav-pill">Macro Radar</button>
+      <button class="nav-pill">Risk Engine</button>
+      <button class="nav-pill">Execution Board</button>
+    </div>
+
+    <div class="sidebar-section">
+      <p class="section-label">Camadas críticas</p>
+      <ul class="list-clean">
+        <li>DXY + Tesouro como filtro macro</li>
+        <li>PMD + MME9/MME21 como engine técnico</li>
+        <li>Risco máximo de 1% por operação</li>
+        <li>Bloqueio explícito em fonte degradada</li>
+      </ul>
+    </div>
+
+    <div class="sidebar-section callout">
+      <p class="section-label">Modo operacional</p>
+      <p id="sidebar-headline">Aguardando coleta inicial</p>
+      <button id="refresh-button" class="primary-button">Atualizar dados</button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="hero panel">
+      <div>
+        <p class="eyebrow">MacroFlow refatorado</p>
+        <h2>{{ headline }}</h2>
+        <p class="muted">Dashboard local pronto para leitura institucional, validação técnica e execução disciplinada.</p>
+      </div>
+      <div class="hero-badges">
+        <div class="badge-card">
+          <span class="badge-label">Status</span>
+          <strong id="headline-status">N/A</strong>
+        </div>
+        <div class="badge-card">
+          <span class="badge-label">Última coleta</span>
+          <strong id="headline-time">-</strong>
+        </div>
+      </div>
+    </header>
+
+    <section class="metrics-grid">
+      <article class="metric-card panel">
+        <span class="metric-label">Regime Macro</span>
+        <strong id="metric-regime">-</strong>
+        <p id="metric-regime-detail" class="muted">Sem dados</p>
+      </article>
+      <article class="metric-card panel">
+        <span class="metric-label">Score Institucional</span>
+        <strong id="metric-score">-</strong>
+        <p class="muted">Trava de segurança alinhada ao contexto macro</p>
+      </article>
+      <article class="metric-card panel">
+        <span class="metric-label">Dados Críticos</span>
+        <strong id="metric-health">-</strong>
+        <p class="muted">FRED, Yahoo e consistência operacional</p>
+      </article>
+      <article class="metric-card panel accent">
+        <span class="metric-label">Plano Final</span>
+        <strong id="metric-decision">-</strong>
+        <p id="metric-decision-detail" class="muted">Aguardando leitura</p>
+      </article>
+    </section>
+
+    <section class="split-grid">
+      <article class="panel large-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Macro Core</p>
+            <h3>Contexto e travas</h3>
+          </div>
+          <span class="tag" id="macro-tag">Sem dados</span>
+        </div>
+        <div class="macro-grid" id="macro-grid"></div>
+      </article>
+
+      <article class="panel large-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Audit Trail</p>
+            <h3>Saúde das fontes</h3>
+          </div>
+          <span class="tag subtle">dados críticos</span>
+        </div>
+        <div id="source-health" class="health-list"></div>
+      </article>
+    </section>
+
+    <section id="decisions-grid" class="decisions-grid"></section>
+
+    <section class="split-grid">
+      <article class="panel large-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Terminal View</p>
+            <h3>Relatório determinístico</h3>
+          </div>
+          <span class="tag subtle">explicável</span>
+        </div>
+        <pre id="terminal-report" class="terminal-output">Sem relatório disponível.</pre>
+      </article>
+
+      <article class="panel large-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Artefatos</p>
+            <h3>Persistência local</h3>
+          </div>
+          <span class="tag subtle">excel + json</span>
+        </div>
+        <div class="artifact-box">
+          <p class="muted">Excel principal</p>
+          <strong id="excel-path">-</strong>
+        </div>
+      </article>
+    </section>
+  </main>
+</div>
+{% endblock %}

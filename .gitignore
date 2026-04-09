@@ -4,6 +4,7 @@
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Environment variables
 .env
@@ -20,3 +21,6 @@ dist/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Runtime artifacts
+data/runtime/

@@ -1,43 +1,39 @@
-# src/run_macroflow.py
-"""
-MacroFlow Runner (1 comando)
-1) Coleta dados (macroflow_coletor) e atualiza o Excel
-2) Executa o agente (agente_macroflow) e imprime a recomendação no terminal
-"""
+import argparse
 
-# 🔹 CARREGA .ENV PRIMEIRO (ANTES DE QUALQUER COISA)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
+import uvicorn
 
-from src.macroflow_coletor import executar_coleta
-from src.agente_macroflow import gerar_recomendacao
-from src.settings import ConfigColetor, ConfigAgente
+from src.macroflow import executar_coleta, gerar_recomendacao, load_settings
+from src.macroflow.api import create_app
 
 
-def main():
-    print("\n==============================")
-    print("   MACROFLOW PRO — RUNNER")
-    print("==============================\n")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Orquestrador principal do MacroFlow.")
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "collect", "agent", "serve"])
+    parser.add_argument("--host", default=None, help="Host do servidor web.")
+    parser.add_argument("--port", type=int, default=None, help="Porta do servidor web.")
+    args = parser.parse_args()
 
-    # 1) Coleta
-    print("⏳ Coletando dados e atualizando Excel...\n")
-    cfg_coletor = ConfigColetor()
-    executar_coleta(cfg_coletor)
+    settings = load_settings()
+    if args.host:
+        settings.host = args.host
+    if args.port:
+        settings.port = args.port
 
-    # 2) Agente
-    print("\n🧠 Gerando recomendação institucional...\n")
-    cfg_agente = ConfigAgente(caminho_excel=cfg_coletor.caminho_excel)
-    resposta = gerar_recomendacao(cfg_agente, usar_llm=False)
+    if args.command == "collect":
+        resultado = executar_coleta(settings)
+        print("\n" + str(resultado["terminal_report"]) + "\n")
+        return
 
-    print("\n📌 RECOMENDAÇÃO FINAL")
-    print("----------------------------------------")
-    print(resposta)
-    print("----------------------------------------\n")
+    if args.command == "agent":
+        print("\n" + gerar_recomendacao(settings) + "\n")
+        return
 
-    print("✅ Pipeline concluído.\n")
+    if args.command == "serve":
+        uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
+        return
+
+    resultado = executar_coleta(settings)
+    print("\n" + str(resultado["terminal_report"]) + "\n")
 
 
 if __name__ == "__main__":
