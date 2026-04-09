@@ -10,11 +10,11 @@ from .domain import Direction, ExecutionStatus, MacroContext, PositionSizing, Re
 from .indicators import candle_history, formatar_numero
 
 
-def calcular_score_regime(dxy_rsi: float, us10y_delta: float, spx_delta: float) -> tuple[str, int]:
+def calcular_score_regime(dxy_rsi14: float, us10y_delta: float, spx_delta: float) -> tuple[str, int]:
     score_delta = 0
-    if dxy_rsi >= 55:
+    if dxy_rsi14 >= 55:
         score_delta += 30
-    elif dxy_rsi <= 45:
+    elif dxy_rsi14 <= 45:
         score_delta -= 20
 
     if us10y_delta > 0:

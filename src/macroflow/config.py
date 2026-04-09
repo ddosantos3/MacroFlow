@@ -7,6 +7,20 @@ from typing import Dict, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _load_project_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except Exception:
+        return
+
+    project_env = PROJECT_ROOT / ".env"
+    if project_env.exists():
+        load_dotenv(project_env, override=False)
+        return
+
+    load_dotenv(override=False)
+
+
 def _env_float(name: str) -> float | None:
     value = os.getenv(name, "").strip()
     if not value:
@@ -85,6 +99,7 @@ PASSOS_NIVEIS_FIXOS: Dict[str, Tuple[float, int]] = {
 
 
 def load_settings() -> AppSettings:
+    _load_project_dotenv()
     storage = StorageConfig()
     runtime_dir = Path(_env_str("MACROFLOW_RUNTIME_DIR", str(storage.runtime_dir))).expanduser()
     storage.runtime_dir = runtime_dir
