@@ -1,5 +1,7 @@
 const state = {
   dashboard: null,
+  currentTab: "menu-principal",
+  currentTimeframe: "4H",
 };
 
 const formatNumber = (value, digits = 2) => {
@@ -15,156 +17,352 @@ const formatPercent = (value) => {
   return `${formatNumber(value, 2)}%`;
 };
 
-const drawChart = (container, series) => {
+const escapeHtml = (value) => String(value ?? "")
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;");
+
+const setActiveTab = (tabId) => {
+  state.currentTab = tabId;
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tabId);
+  });
+  document.querySelectorAll("[data-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.panel === tabId);
+  });
+};
+
+const getDecisionMap = () => {
+  const entries = (state.dashboard?.asset_decisions || []).map((decision) => [decision.asset, decision]);
+  return new Map(entries);
+};
+
+const renderTimeframeSwitches = () => {
+  document.querySelectorAll("[data-timeframe-group]").forEach((host) => {
+    host.innerHTML = ["4H", "1D"].map((timeframe) => `
+      <button class="timeframe-chip ${state.currentTimeframe === timeframe ? "active" : ""}" data-timeframe="${timeframe}">
+        ${timeframe}
+      </button>
+    `).join("");
+  });
+  document.querySelectorAll("[data-timeframe]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentTimeframe = button.dataset.timeframe;
+      renderTimeframeSwitches();
+      renderChartAssets();
+      renderIndicatorAssets();
+    });
+  });
+};
+
+const drawLineChart = (container, series, options = {}) => {
   if (!container) return;
-  if (!series || !series.length) {
-    container.innerHTML = "<p class='muted'>Sem histórico suficiente para desenhar o gráfico.</p>";
+  const validSeries = series.filter((line) => Array.isArray(line.values) && line.values.some(Number.isFinite));
+  if (!validSeries.length) {
+    container.innerHTML = "<p class='muted'>Sem dados suficientes para desenhar este gráfico.</p>";
     return;
   }
 
   const width = 760;
   const height = 210;
-  const padding = 18;
-  const values = series.flatMap((point) => [point.close, point.ema_fast, point.ema_slow]).filter(Number.isFinite);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const scaleX = (index) => padding + (index / Math.max(series.length - 1, 1)) * (width - padding * 2);
+  const padding = 16;
+  const allValues = validSeries.flatMap((line) => line.values).filter(Number.isFinite);
+  const min = options.min ?? Math.min(...allValues);
+  const max = options.max ?? Math.max(...allValues);
+  const totalPoints = Math.max(...validSeries.map((line) => line.values.length));
+  const scaleX = (index) => padding + (index / Math.max(totalPoints - 1, 1)) * (width - padding * 2);
   const scaleY = (value) => {
     if (max === min) return height / 2;
     return height - padding - ((value - min) / (max - min)) * (height - padding * 2);
   };
-
-  const toPath = (key) => series
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${scaleX(index)} ${scaleY(point[key])}`)
+  const makePath = (values) => values
+    .map((value, index) => `${index === 0 ? "M" : "L"} ${scaleX(index)} ${scaleY(value)}`)
     .join(" ");
+
+  const thresholdPaths = (options.thresholds || []).map((threshold) => {
+    const y = scaleY(threshold.value);
+    return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="${threshold.color}" stroke-dasharray="4 4" opacity="0.35"></line>`;
+  }).join("");
+
+  const linePaths = validSeries.map((line) => `
+    <path d="${makePath(line.values)}" fill="none" stroke="${line.color}" stroke-width="${line.strokeWidth || 2}" stroke-linecap="round" opacity="${line.opacity || 1}"></path>
+  `).join("");
 
   container.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="closeGradient" x1="0" x2="1">
-          <stop offset="0%" stop-color="#d7c06e"/>
-          <stop offset="100%" stop-color="#f4efb5"/>
-        </linearGradient>
-      </defs>
-      <path d="${toPath("close")}" fill="none" stroke="url(#closeGradient)" stroke-width="2.4" stroke-linecap="round"></path>
-      <path d="${toPath("ema_fast")}" fill="none" stroke="#90f3b4" stroke-width="1.8" stroke-linecap="round" opacity="0.95"></path>
-      <path d="${toPath("ema_slow")}" fill="none" stroke="#f67d8d" stroke-width="1.8" stroke-linecap="round" opacity="0.88"></path>
+      ${thresholdPaths}
+      ${linePaths}
     </svg>
   `;
 };
 
-const renderMacroGrid = (macro) => {
-  const grid = document.getElementById("macro-grid");
-  if (!grid) return;
-  const items = [
-    { label: "DXY", value: formatNumber(macro.dxy_fred, 2), detail: `RSI14 ${formatNumber(macro.dxy_rsi14, 2)}` },
-    { label: "US10Y", value: formatNumber(macro.us10y_fred, 2), detail: `Delta 5d ${formatNumber(macro.us10y_delta_5d, 2)}` },
-    { label: "SPX 4H", value: formatNumber(macro.spx_delta_5x4h, 2), detail: "Variação 5x4h" },
-    { label: "Filtro", value: macro.nao_operar ? "TRAVADO" : "LIBERADO", detail: macro.motivo_nao_operar },
-  ];
-  grid.innerHTML = items.map((item) => `
-    <div class="decision-stat">
-      <p class="metric-label">${item.label}</p>
-      <strong>${item.value}</strong>
-      <p class="muted">${item.detail}</p>
-    </div>
-  `).join("");
-};
+const drawCandlestickChart = (container, candles) => {
+  if (!container) return;
+  if (!candles || !candles.length) {
+    container.innerHTML = "<p class='muted'>Sem candles suficientes para este ativo.</p>";
+    return;
+  }
 
-const renderSourceHealth = (healthItems) => {
-  const host = document.getElementById("source-health");
-  const okCount = healthItems.filter((item) => item.ok).length;
-  document.getElementById("metric-health").textContent = `${okCount}/${healthItems.length || 0}`;
-  if (!host) return;
-  host.innerHTML = healthItems.map((item) => `
-    <div class="health-row">
-      <div>
-        <strong><span class="status-dot ${item.ok ? "status-ok" : "status-bad"}"></span>${item.source}</strong>
-        <p class="muted">${item.message}</p>
-      </div>
-      <span class="tag ${item.ok ? "" : "subtle"}">${item.last_updated || "sem timestamp"}</span>
-    </div>
-  `).join("");
-};
+  const width = 760;
+  const height = 240;
+  const padding = 18;
+  const highs = candles.map((candle) => candle.high).filter(Number.isFinite);
+  const lows = candles.map((candle) => candle.low).filter(Number.isFinite);
+  const min = Math.min(...lows);
+  const max = Math.max(...highs);
+  const scaleX = (index) => padding + (index / Math.max(candles.length, 1)) * (width - padding * 2);
+  const scaleY = (value) => {
+    if (max === min) return height / 2;
+    return height - padding - ((value - min) / (max - min)) * (height - padding * 2);
+  };
+  const candleWidth = Math.max(4, (width - padding * 2) / Math.max(candles.length, 1) * 0.52);
 
-const renderDecisionCard = (decision) => {
-  const wrapper = document.createElement("article");
-  wrapper.className = "decision-card panel";
-  wrapper.innerHTML = `
-    <div class="decision-top">
-      <div>
-        <p class="eyebrow">${decision.asset}</p>
-        <h3>${decision.label}</h3>
-        <p class="muted">${decision.stage_reason}</p>
-      </div>
-      <span class="tag">${decision.execution_status}</span>
-    </div>
-    <div class="decision-metrics">
-      <div class="decision-stat">
-        <p class="metric-label">Macro x Técnico</p>
-        <strong>${decision.macro_direction} / ${decision.technical_direction}</strong>
-        <p class="muted">${decision.macro_aligned ? "convergente" : "desalinhado"}</p>
-      </div>
-      <div class="decision-stat">
-        <p class="metric-label">Entrada / Stop</p>
-        <strong>${formatNumber(decision.entry_price, 4)} / ${formatNumber(decision.stop_price, 4)}</strong>
-        <p class="muted">MME21 como stop móvel</p>
-      </div>
-      <div class="decision-stat">
-        <p class="metric-label">Risco / Quantidade</p>
-        <strong>${formatNumber(decision.position_sizing?.risco_por_unidade, 4)} / ${formatNumber(decision.position_sizing?.quantidade, 2)}</strong>
-        <p class="muted">${decision.position_sizing?.observacao || "Sizing indisponível"}</p>
-      </div>
-    </div>
-    <div class="chart-box"></div>
-    <div class="decision-metrics">
-      <div class="decision-stat">
-        <p class="metric-label">Preço</p>
-        <strong>${formatNumber(decision.price, 4)}</strong>
-        <p class="muted">Variação ${formatPercent(decision.change_pct)}</p>
-      </div>
-      <div class="decision-stat">
-        <p class="metric-label">PMD / MME9</p>
-        <strong>${formatNumber(decision.pmd, 4)} / ${formatNumber(decision.ema_fast, 4)}</strong>
-        <p class="muted">Touch: ${decision.touch_detected_at || "-"}</p>
-      </div>
-      <div class="decision-stat">
-        <p class="metric-label">MME21 / Confirmação</p>
-        <strong>${formatNumber(decision.ema_slow, 4)} / ${decision.confirmation_at || "-"}</strong>
-        <p class="muted">${decision.exit_condition}</p>
-      </div>
-    </div>
+  const shapes = candles.map((candle, index) => {
+    const x = scaleX(index);
+    const openY = scaleY(candle.open);
+    const closeY = scaleY(candle.close);
+    const highY = scaleY(candle.high);
+    const lowY = scaleY(candle.low);
+    const rising = candle.close >= candle.open;
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.max(Math.abs(closeY - openY), 2);
+    const color = rising ? "#92efb4" : "#f27e8c";
+    return `
+      <line x1="${x}" y1="${highY}" x2="${x}" y2="${lowY}" stroke="${color}" stroke-width="1.2" opacity="0.82"></line>
+      <rect x="${x - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" rx="2" fill="${color}" opacity="0.88"></rect>
+    `;
+  }).join("");
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+      ${shapes}
+    </svg>
   `;
-  drawChart(wrapper.querySelector(".chart-box"), decision.history || []);
-  return wrapper;
+};
+
+const renderOverview = (overview) => {
+  document.getElementById("overview-title").textContent = overview.title || "Menu Principal";
+  document.getElementById("overview-subtitle").textContent = overview.subtitle || "";
+  const cardsHost = document.getElementById("overview-cards");
+  cardsHost.innerHTML = (overview.cards || []).map((card) => `
+    <article class="overview-card">
+      <p class="metric-label">${escapeHtml(card.label)}</p>
+      <strong>${escapeHtml(card.value)}</strong>
+      <p class="muted">${escapeHtml(card.detail)}</p>
+    </article>
+  `).join("");
+
+  document.getElementById("macroflow-does").innerHTML = (overview.macroflow_does || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  document.getElementById("market-notes").innerHTML = (overview.market_notes || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+};
+
+const renderChartAssets = () => {
+  const host = document.getElementById("chart-assets-grid");
+  if (!host) return;
+  const decisionMap = getDecisionMap();
+  host.innerHTML = "";
+
+  (state.dashboard?.market_assets || []).forEach((asset) => {
+    const timeframe = state.currentTimeframe;
+    const chartPayload = asset.charts?.[timeframe] || { candles: [] };
+    const decision = decisionMap.get(asset.asset);
+    const card = document.createElement("article");
+    card.className = "asset-card panel";
+    card.innerHTML = `
+      <div class="asset-top">
+        <div>
+          <p class="eyebrow">${escapeHtml(asset.asset)}</p>
+          <h3>${escapeHtml(asset.label)}</h3>
+          <p class="muted">${escapeHtml(asset.description)}</p>
+        </div>
+        <span class="tag subtle">${decision ? escapeHtml(decision.execution_status) : "monitoramento"}</span>
+      </div>
+      <div class="latest-metrics">
+        <div class="metric-box">
+          <p class="metric-label">Preço</p>
+          <strong>${formatNumber(asset.latest?.price, 4)}</strong>
+          <p class="muted">Var. ${formatPercent(asset.latest?.change_pct_4h)}</p>
+        </div>
+        <div class="metric-box">
+          <p class="metric-label">Volume 4H</p>
+          <strong>${formatNumber(asset.latest?.volume_4h, 0)}</strong>
+          <p class="muted">Base Yahoo reamostrada</p>
+        </div>
+        <div class="metric-box">
+          <p class="metric-label">RSI Diário</p>
+          <strong>${formatNumber(asset.latest?.rsi_daily, 2)}</strong>
+          <p class="muted">Momentum do ativo</p>
+        </div>
+        <div class="metric-box">
+          <p class="metric-label">Visualização</p>
+          <strong>${timeframe}</strong>
+          <p class="muted">${escapeHtml(asset.ticker)}</p>
+        </div>
+      </div>
+      <div class="chart-box"></div>
+    `;
+    drawCandlestickChart(card.querySelector(".chart-box"), chartPayload.candles || []);
+    host.appendChild(card);
+  });
+};
+
+const renderIndicatorAssets = () => {
+  const host = document.getElementById("indicator-assets-grid");
+  if (!host) return;
+  const decisionMap = getDecisionMap();
+  host.innerHTML = "";
+
+  (state.dashboard?.market_assets || []).forEach((asset) => {
+    const timeframe = state.currentTimeframe;
+    const indicatorPayload = asset.charts?.[timeframe]?.indicators || [];
+    const decision = decisionMap.get(asset.asset);
+    const priceSeries = [
+      { color: "#dbc46d", values: indicatorPayload.map((item) => Number(item.close)) },
+      { color: "#b9c2cf", values: indicatorPayload.map((item) => Number(item.pmd)) },
+      { color: "#92efb4", values: indicatorPayload.map((item) => Number(item.ema_fast)) },
+      { color: "#f27e8c", values: indicatorPayload.map((item) => Number(item.ema_slow)) },
+    ];
+    const rsiSeries = [
+      { color: "#92efb4", values: indicatorPayload.map((item) => Number(item.rsi)), strokeWidth: 2.2 },
+    ];
+
+    const card = document.createElement("article");
+    card.className = "asset-card panel";
+    card.innerHTML = `
+      <div class="asset-top">
+        <div>
+          <p class="eyebrow">${escapeHtml(asset.asset)}</p>
+          <h3>${escapeHtml(asset.label)}</h3>
+          <p class="muted">${decision ? escapeHtml(decision.stage_reason) : escapeHtml(asset.description)}</p>
+        </div>
+        <span class="tag">${timeframe}</span>
+      </div>
+      <div class="indicator-details">
+        <div class="stack-list">
+          <div class="chart-box indicator-price-chart"></div>
+          <div class="chart-box indicator-rsi-chart"></div>
+        </div>
+        <div class="stack-list">
+          <div class="decision-box">
+            <p class="metric-label">PMD / MME9 / MME21</p>
+            <strong>${formatNumber(asset.latest?.pmd, 4)} / ${formatNumber(asset.latest?.ema_fast, 4)} / ${formatNumber(asset.latest?.ema_slow, 4)}</strong>
+            <p class="muted">Leitura estrutural do setup em ${timeframe}.</p>
+          </div>
+          <div class="decision-box">
+            <p class="metric-label">RSI e direção</p>
+            <strong>${formatNumber(asset.latest?.rsi_daily, 2)} | ${decision ? escapeHtml(decision.technical_direction) : "Monitoramento"}</strong>
+            <p class="muted">${decision ? `Status ${escapeHtml(decision.execution_status)}` : "Ativo não operacional, exibido para leitura contextual."}</p>
+          </div>
+          <ul class="list-clean">
+            ${(asset.indicator_notes || []).map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
+          </ul>
+        </div>
+      </div>
+    `;
+
+    drawLineChart(card.querySelector(".indicator-price-chart"), priceSeries);
+    drawLineChart(card.querySelector(".indicator-rsi-chart"), rsiSeries, {
+      min: 0,
+      max: 100,
+      thresholds: [
+        { value: 45, color: "#f27e8c" },
+        { value: 55, color: "#dbc46d" },
+      ],
+    });
+    host.appendChild(card);
+  });
+};
+
+const renderNews = (newsCenter) => {
+  document.getElementById("news-title").textContent = newsCenter.title || "Notícias do Mercado Financeiro";
+  document.getElementById("news-summary").textContent = newsCenter.summary || "";
+  document.getElementById("news-status").textContent = newsCenter.status || "planejamento";
+  document.getElementById("news-sources").innerHTML = (newsCenter.sources || []).map((item) => `
+    <div class="stack-item">
+      <p class="metric-label">${escapeHtml(item.source)}</p>
+      <strong>${escapeHtml(item.title)}</strong>
+      <p class="muted">${escapeHtml(item.description)}</p>
+    </div>
+  `).join("");
+  document.getElementById("news-bias-framework").innerHTML = (newsCenter.bias_framework || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  document.getElementById("news-implementation").innerHTML = (newsCenter.implementation_tasks || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+};
+
+const renderSettings = (settingsPanel) => {
+  const form = document.getElementById("settings-form");
+  if (!form) return;
+  document.getElementById("settings-note").textContent = settingsPanel.runtime_note || "";
+  document.getElementById("save-settings-button").textContent = settingsPanel.save_label || "Salvar configurações";
+  document.getElementById("refresh-button").textContent = settingsPanel.operational_button_label || "Iniciar Macroflow";
+
+  form.innerHTML = (settingsPanel.groups || []).map((group) => `
+    <section class="setting-group panel">
+      <div class="setting-group-header">
+        <p class="eyebrow">${escapeHtml(group.title)}</p>
+        <p>${escapeHtml(group.description)}</p>
+      </div>
+      <div class="setting-group-fields">
+        ${(group.fields || []).map((field) => {
+          const isSelect = field.type === "select";
+          const control = isSelect
+            ? `<select data-env="${field.env}" data-secret="${field.secret ? "1" : "0"}">
+                ${(field.options || []).map((option) => `
+                  <option value="${escapeHtml(option)}" ${String(field.value) === String(option) ? "selected" : ""}>${escapeHtml(option)}</option>
+                `).join("")}
+              </select>`
+            : `<input
+                type="${field.type || "text"}"
+                data-env="${field.env}"
+                data-secret="${field.secret ? "1" : "0"}"
+                value="${escapeHtml(field.value || "")}"
+                placeholder="${escapeHtml(field.configured ? "Chave configurada" : (field.placeholder || ""))}"
+                step="${escapeHtml(field.step || "")}"
+              />`;
+          return `
+            <div class="setting-field">
+              <label>${escapeHtml(field.label)}</label>
+              ${control}
+              <small>${escapeHtml(field.help || "")}</small>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `).join("");
 };
 
 const renderDashboard = (dashboard) => {
   state.dashboard = dashboard;
-  const macro = dashboard.macro_context;
+  state.currentTimeframe = dashboard.summary?.default_chart_timeframe || state.currentTimeframe || "4H";
+
+  const macro = dashboard.macro_context || {};
   document.getElementById("headline-status").textContent = macro.nao_operar ? "Não operar" : "Operável";
   document.getElementById("headline-time").textContent = dashboard.generated_at || "-";
   document.getElementById("sidebar-headline").textContent = dashboard.summary?.headline || "Sem headline";
-  document.getElementById("metric-regime").textContent = macro.regime || "-";
-  document.getElementById("metric-regime-detail").textContent = macro.motivo_nao_operar || "Sem motivo";
-  document.getElementById("metric-score").textContent = macro.score ?? "-";
-  document.getElementById("metric-decision").textContent = dashboard.summary?.has_actionable_trade ? "Setup ativo" : "Em observação";
-  document.getElementById("metric-decision-detail").textContent = macro.nao_operar ? macro.motivo_nao_operar : "Macro e técnico exibidos por ativo";
-  document.getElementById("metric-health").textContent = "-";
-  document.getElementById("macro-tag").textContent = macro.headline || "Sem headline";
-  document.getElementById("terminal-report").textContent = dashboard.terminal_report || "Sem relatório.";
-  document.getElementById("excel-path").textContent = dashboard.summary?.excel_path || "-";
+  document.getElementById("sidebar-time").textContent = dashboard.generated_at
+    ? `Atualizado em ${dashboard.generated_at}`
+    : "Sem atualização recente";
 
-  renderMacroGrid(macro);
-  renderSourceHealth(dashboard.source_health || []);
-
-  const grid = document.getElementById("decisions-grid");
-  grid.innerHTML = "";
-  (dashboard.asset_decisions || []).forEach((decision) => grid.appendChild(renderDecisionCard(decision)));
+  renderTimeframeSwitches();
+  renderOverview(dashboard.market_overview || {});
+  renderChartAssets();
+  renderIndicatorAssets();
+  renderNews(dashboard.news_center || {});
+  renderSettings(dashboard.settings_panel || {});
 };
 
 const loadDashboard = async () => {
   const response = await fetch("/api/dashboard");
+  if (!response.ok) throw new Error("Falha ao carregar o dashboard.");
   const dashboard = await response.json();
   renderDashboard(dashboard);
 };
@@ -182,11 +380,64 @@ const refreshDashboard = async () => {
     alert(error.message);
   } finally {
     button.disabled = false;
-    button.textContent = "Atualizar dados";
+    button.textContent = state.dashboard?.settings_panel?.operational_button_label || "Iniciar Macroflow";
   }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+const saveSettings = async () => {
+  const button = document.getElementById("save-settings-button");
+  const feedback = document.getElementById("settings-feedback");
+  const values = {};
+
+  document.querySelectorAll("#settings-form [data-env]").forEach((input) => {
+    const env = input.dataset.env;
+    const secret = input.dataset.secret === "1";
+    const value = String(input.value ?? "").trim();
+    if (secret && !value) return;
+    values[env] = value;
+  });
+
+  button.disabled = true;
+  feedback.textContent = "Salvando...";
+  try {
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Falha ao salvar configurações");
+
+    state.dashboard = state.dashboard || {};
+    state.dashboard.settings_panel = payload.settings;
+    renderSettings(payload.settings);
+    const chartField = payload.settings.groups
+      .flatMap((group) => group.fields)
+      .find((field) => field.env === "MACROFLOW_CHART_DEFAULT_TIMEFRAME");
+    if (chartField?.value) {
+      state.currentTimeframe = chartField.value;
+      renderTimeframeSwitches();
+      renderChartAssets();
+      renderIndicatorAssets();
+    }
+    feedback.textContent = "Configurações salvas. Clique em Iniciar Macroflow para aplicar a nova coleta.";
+  } catch (error) {
+    feedback.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+  });
   document.getElementById("refresh-button")?.addEventListener("click", refreshDashboard);
-  loadDashboard();
+  document.getElementById("save-settings-button")?.addEventListener("click", saveSettings);
+  setActiveTab(state.currentTab);
+  try {
+    await loadDashboard();
+  } catch (error) {
+    alert(error.message);
+  }
 });

@@ -72,6 +72,7 @@ def preparar_frame_diario(df_diario: pd.DataFrame, ema_fast: int, ema_slow: int,
     frame["PMD"] = (frame["High"] + frame["Low"]) / 2
     frame["EMA_FAST"] = frame["PMD"].ewm(span=ema_fast, adjust=False).mean()
     frame["EMA_SLOW"] = frame["PMD"].ewm(span=ema_slow, adjust=False).mean()
+    frame["RSI"] = calcular_rsi(frame["Close"], 14)
     frame["POSITIVE_CLOSE"] = (frame["Close"] > frame["Open"]) | (frame["Close"] > frame["Close"].shift(1))
     frame["NEGATIVE_CLOSE"] = (frame["Close"] < frame["Open"]) | (frame["Close"] < frame["Close"].shift(1))
     frame["TOUCH_EMA_SLOW"] = (
@@ -137,6 +138,42 @@ def candle_history(frame: pd.DataFrame, limit: int = 90) -> list[dict[str, objec
             }
         )
     return data
+
+
+def serialize_ohlc(frame: pd.DataFrame, limit: int = 80) -> list[dict[str, object]]:
+    if frame.empty:
+        return []
+    candles = []
+    for timestamp, row in frame.tail(limit).iterrows():
+        candles.append(
+            {
+                "timestamp": pd.Timestamp(timestamp).strftime("%Y-%m-%d %H:%M"),
+                "open": float(row["Open"]),
+                "high": float(row["High"]),
+                "low": float(row["Low"]),
+                "close": float(row["Close"]),
+                "volume": float(row["Volume"]) if "Volume" in row and pd.notna(row["Volume"]) else None,
+            }
+        )
+    return candles
+
+
+def serialize_indicator_frame(frame: pd.DataFrame, limit: int = 120) -> list[dict[str, object]]:
+    if frame.empty:
+        return []
+    points = []
+    for timestamp, row in frame.tail(limit).iterrows():
+        points.append(
+            {
+                "timestamp": pd.Timestamp(timestamp).strftime("%Y-%m-%d"),
+                "close": float(row["Close"]),
+                "pmd": float(row["PMD"]) if "PMD" in row and pd.notna(row["PMD"]) else None,
+                "ema_fast": float(row["EMA_FAST"]) if "EMA_FAST" in row and pd.notna(row["EMA_FAST"]) else None,
+                "ema_slow": float(row["EMA_SLOW"]) if "EMA_SLOW" in row and pd.notna(row["EMA_SLOW"]) else None,
+                "rsi": float(row["RSI"]) if "RSI" in row and pd.notna(row["RSI"]) else None,
+            }
+        )
+    return points
 
 
 def formatar_numero(valor: float | None, casas: int = 4) -> str:

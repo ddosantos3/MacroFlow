@@ -8,6 +8,18 @@ MacroFlow agora é uma plataforma local de inteligência macro + execução disc
 
 O projeto foi refatorado para separar ingestão, indicadores, estratégia, persistência e apresentação. O Excel continua existindo como artefato de compatibilidade, mas o contrato principal do sistema passa a ser o estado local em JSON consumido pelo dashboard.
 
+## Dashboard modular
+
+O frontend local foi reorganizado em abas funcionais:
+
+- `Menu Principal`: panorama geral do mercado e explicação do que o MacroFlow faz;
+- `Análise Gráfica`: candles de todos os ativos monitorados;
+- `Indicadores Técnicos`: linhas de PMD, MME9, MME21 e RSI por ativo;
+- `Notícias do Mercado Financeiro`: módulo planejado, com backlog e arquitetura de integração;
+- `Configurações`: edição dos parâmetros principais diretamente pela interface, com gravação no `.env`.
+
+O botão `Iniciar Macroflow` agora fica logo abaixo de `Configurações` no menu lateral e recompõe os dados do dashboard sob demanda.
+
 ## O que mudou
 
 - a coleta macro e de mercado saiu do script monolítico e foi organizada em módulos;
@@ -118,6 +130,7 @@ Variáveis principais:
 - `MACROFLOW_CAPITAL_TOTAL_BRL`
 - `MACROFLOW_RUNTIME_DIR`
 - `MACROFLOW_EXCEL_PATH`
+- `MACROFLOW_CHART_DEFAULT_TIMEFRAME`
 - `MACROFLOW_PORT`
 
 ## Execução

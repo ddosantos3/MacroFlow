@@ -13,39 +13,29 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
-      <p class="section-label">Painéis</p>
-      <button class="nav-pill active">Command Center</button>
-      <button class="nav-pill">Macro Radar</button>
-      <button class="nav-pill">Risk Engine</button>
-      <button class="nav-pill">Execution Board</button>
+    <div class="sidebar-status">
+      <p class="section-label">Estado atual</p>
+      <strong id="sidebar-headline">Aguardando coleta inicial</strong>
+      <p id="sidebar-time" class="muted">Sem atualização recente</p>
     </div>
 
-    <div class="sidebar-section">
-      <p class="section-label">Camadas críticas</p>
-      <ul class="list-clean">
-        <li>DXY + Tesouro como filtro macro</li>
-        <li>PMD + MME9/MME21 como engine técnico</li>
-        <li>Risco máximo de 1% por operação</li>
-        <li>Bloqueio explícito em fonte degradada</li>
-      </ul>
-    </div>
-
-    <div class="sidebar-section callout">
-      <p class="section-label">Modo operacional</p>
-      <p id="sidebar-headline">Aguardando coleta inicial</p>
-      <button id="refresh-button" class="primary-button">Atualizar dados</button>
-    </div>
+    <nav class="sidebar-nav" aria-label="Menu principal do dashboard">
+      <button class="nav-pill active" data-tab="menu-principal">Menu Principal</button>
+      <button class="nav-pill" data-tab="analise-grafica">Análise Gráfica</button>
+      <button class="nav-pill" data-tab="indicadores-tecnicos">Indicadores Técnicos</button>
+      <button class="nav-pill" data-tab="noticias-mercado">Notícias do Mercado Financeiro</button>
+      <button class="nav-pill" data-tab="configuracoes">Configurações</button>
+      <button id="refresh-button" class="primary-button">Iniciar Macroflow</button>
+    </nav>
   </aside>
 
   <main class="content">
-    <header class="hero panel">
+    <header class="topbar panel">
       <div>
-        <p class="eyebrow">MacroFlow refatorado</p>
+        <p class="eyebrow">MacroFlow modular</p>
         <h2>{{ headline }}</h2>
-        <p class="muted">Dashboard local pronto para leitura institucional, validação técnica e execução disciplinada.</p>
       </div>
-      <div class="hero-badges">
+      <div class="topbar-meta">
         <div class="badge-card">
           <span class="badge-label">Status</span>
           <strong id="headline-status">N/A</strong>
@@ -57,80 +47,131 @@
       </div>
     </header>
 
-    <section class="metrics-grid">
-      <article class="metric-card panel">
-        <span class="metric-label">Regime Macro</span>
-        <strong id="metric-regime">-</strong>
-        <p id="metric-regime-detail" class="muted">Sem dados</p>
+    <section class="tab-panel active" data-panel="menu-principal">
+      <article class="panel principal-hero">
+        <div class="principal-hero-content">
+          <p class="eyebrow">Menu Principal</p>
+          <h3 id="overview-title">Panorama geral do mercado</h3>
+          <p id="overview-subtitle" class="hero-copy">O MacroFlow organiza o contexto macro e explica como o motor operacional reage ao cenário vigente.</p>
+        </div>
       </article>
-      <article class="metric-card panel">
-        <span class="metric-label">Score Institucional</span>
-        <strong id="metric-score">-</strong>
-        <p class="muted">Trava de segurança alinhada ao contexto macro</p>
+
+      <section id="overview-cards" class="metrics-grid"></section>
+
+      <section class="split-grid">
+        <article class="panel info-card">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">Sobre o MacroFlow</p>
+              <h3>O que ele faz</h3>
+            </div>
+            <span class="tag">produto</span>
+          </div>
+          <ul id="macroflow-does" class="list-clean"></ul>
+        </article>
+
+        <article class="panel info-card">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">Leitura de mercado</p>
+              <h3>Notas gerais</h3>
+            </div>
+            <span class="tag subtle">visão macro</span>
+          </div>
+          <ul id="market-notes" class="list-clean"></ul>
+        </article>
+      </section>
+    </section>
+
+    <section class="tab-panel" data-panel="analise-grafica">
+      <article class="panel section-shell">
+        <div class="section-topline">
+          <div>
+            <p class="eyebrow">Análise Gráfica</p>
+            <h3>Candlesticks de todos os ativos monitorados</h3>
+            <p class="muted">A leitura gráfica foi separada em módulo próprio para dar liberdade visual e comparação clara entre os ativos.</p>
+          </div>
+          <div class="timeframe-switch" data-timeframe-group="charts"></div>
+        </div>
       </article>
-      <article class="metric-card panel">
-        <span class="metric-label">Dados Críticos</span>
-        <strong id="metric-health">-</strong>
-        <p class="muted">FRED, Yahoo e consistência operacional</p>
+      <section id="chart-assets-grid" class="asset-grid"></section>
+    </section>
+
+    <section class="tab-panel" data-panel="indicadores-tecnicos">
+      <article class="panel section-shell">
+        <div class="section-topline">
+          <div>
+            <p class="eyebrow">Indicadores Técnicos</p>
+            <h3>Linhas de PMD, MME9, MME21 e RSI</h3>
+            <p class="muted">Cada ativo recebe um bloco com série técnica, interpretação rápida e os sinais que o MacroFlow usa para decidir.</p>
+          </div>
+          <div class="timeframe-switch" data-timeframe-group="indicators"></div>
+        </div>
       </article>
-      <article class="metric-card panel accent">
-        <span class="metric-label">Plano Final</span>
-        <strong id="metric-decision">-</strong>
-        <p id="metric-decision-detail" class="muted">Aguardando leitura</p>
+      <section id="indicator-assets-grid" class="asset-grid"></section>
+    </section>
+
+    <section class="tab-panel" data-panel="noticias-mercado">
+      <article class="panel section-shell">
+        <div class="section-topline">
+          <div>
+            <p class="eyebrow">Notícias do Mercado Financeiro</p>
+            <h3 id="news-title">Backlog estruturado para o módulo de notícias</h3>
+            <p id="news-summary" class="muted">Esta aba foi preparada para consolidar calendário econômico, notícias relevantes e viés macro de forma auditável.</p>
+          </div>
+          <span id="news-status" class="tag subtle">planejamento</span>
+        </div>
+      </article>
+
+      <section class="split-grid">
+        <article class="panel info-card">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">Fontes planejadas</p>
+              <h3>Coleta e cobertura</h3>
+            </div>
+          </div>
+          <div id="news-sources" class="stack-list"></div>
+        </article>
+
+        <article class="panel info-card">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">Viés e impacto</p>
+              <h3>Como ler o noticiário</h3>
+            </div>
+          </div>
+          <ul id="news-bias-framework" class="list-clean"></ul>
+        </article>
+      </section>
+
+      <article class="panel info-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Próximas tarefas</p>
+            <h3>Roadmap do módulo</h3>
+          </div>
+        </div>
+        <ul id="news-implementation" class="list-clean"></ul>
       </article>
     </section>
 
-    <section class="split-grid">
-      <article class="panel large-card">
-        <div class="card-header">
+    <section class="tab-panel" data-panel="configuracoes">
+      <article class="panel section-shell">
+        <div class="section-topline">
           <div>
-            <p class="eyebrow">Macro Core</p>
-            <h3>Contexto e travas</h3>
+            <p class="eyebrow">Configurações</p>
+            <h3>Parâmetros editáveis do MacroFlow</h3>
+            <p id="settings-note" class="muted">Ajuste o núcleo técnico, risco e timeframes sem sair do dashboard.</p>
           </div>
-          <span class="tag" id="macro-tag">Sem dados</span>
-        </div>
-        <div class="macro-grid" id="macro-grid"></div>
-      </article>
-
-      <article class="panel large-card">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">Audit Trail</p>
-            <h3>Saúde das fontes</h3>
-          </div>
-          <span class="tag subtle">dados críticos</span>
-        </div>
-        <div id="source-health" class="health-list"></div>
-      </article>
-    </section>
-
-    <section id="decisions-grid" class="decisions-grid"></section>
-
-    <section class="split-grid">
-      <article class="panel large-card">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">Terminal View</p>
-            <h3>Relatório determinístico</h3>
-          </div>
-          <span class="tag subtle">explicável</span>
-        </div>
-        <pre id="terminal-report" class="terminal-output">Sem relatório disponível.</pre>
-      </article>
-
-      <article class="panel large-card">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">Artefatos</p>
-            <h3>Persistência local</h3>
-          </div>
-          <span class="tag subtle">excel + json</span>
-        </div>
-        <div class="artifact-box">
-          <p class="muted">Excel principal</p>
-          <strong id="excel-path">-</strong>
+          <span class="tag">.env local</span>
         </div>
       </article>
+      <form id="settings-form" class="settings-grid"></form>
+      <div class="settings-actions">
+        <button id="save-settings-button" class="primary-button" type="button">Salvar configurações</button>
+        <span id="settings-feedback" class="muted"></span>
+      </div>
     </section>
   </main>
 </div>

@@ -102,6 +102,10 @@ class DashboardState:
     source_health: list[SourceHealth]
     terminal_report: str
     summary: dict[str, Any] = field(default_factory=dict)
+    market_overview: dict[str, Any] = field(default_factory=dict)
+    market_assets: list[dict[str, Any]] = field(default_factory=list)
+    news_center: dict[str, Any] = field(default_factory=dict)
+    settings_panel: dict[str, Any] = field(default_factory=dict)
 
 
 def to_plain(value: Any) -> Any:

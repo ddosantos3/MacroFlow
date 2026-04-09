@@ -53,6 +53,7 @@ class MarketConfig:
     yahoo_intraday_interval: str = "60m"
     yahoo_daily_period: str = "1y"
     yahoo_daily_interval: str = "1d"
+    chart_default_timeframe: str = "4H"
     rsi_period: int = 14
     macro_delta_bars: int = 5
     volume_lookback: int = 50
@@ -87,8 +88,22 @@ ATIVOS_YAHOO: Dict[str, str] = {
 
 
 ASSET_LABELS: Dict[str, str] = {
-    "USDBRL": "Mini Dólar (proxy BRL=X)",
+    "USA500": "S&P 500",
+    "USAIND": "Dow Jones",
+    "NDX": "Nasdaq 100",
+    "SPX": "S&P 500 Spot",
     "BRA50": "Mini Índice (proxy IBOV)",
+    "USDBRL": "Mini Dólar (proxy BRL=X)",
+}
+
+
+ASSET_DESCRIPTIONS: Dict[str, str] = {
+    "USA500": "Proxy amplo de apetite ao risco nos Estados Unidos.",
+    "USAIND": "Leitura industrial e direcional das blue chips americanas.",
+    "NDX": "Sensibilidade maior a tecnologia, growth e liquidez global.",
+    "SPX": "Ativo de referência usado na camada macro do MacroFlow.",
+    "BRA50": "Proxy operacional para leitura do mini índice até feed real de WIN.",
+    "USDBRL": "Proxy operacional para leitura do mini dólar até feed real de WDO.",
 }
 
 
@@ -116,6 +131,7 @@ def load_settings() -> AppSettings:
         yahoo_intraday_interval=_env_str("MACROFLOW_YAHOO_INTRADAY_INTERVAL", "60m"),
         yahoo_daily_period=_env_str("MACROFLOW_YAHOO_DAILY_PERIOD", "1y"),
         yahoo_daily_interval=_env_str("MACROFLOW_YAHOO_DAILY_INTERVAL", "1d"),
+        chart_default_timeframe=_env_str("MACROFLOW_CHART_DEFAULT_TIMEFRAME", "4H").upper(),
         rsi_period=_env_int("MACROFLOW_RSI_PERIODO", 14),
         macro_delta_bars=_env_int("MACROFLOW_MACRO_DELTA_BARS", 5),
         volume_lookback=_env_int("MACROFLOW_VOLUME_LOOKBACK", 50),

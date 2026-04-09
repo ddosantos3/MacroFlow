@@ -3,7 +3,14 @@ from typing import Any
 
 import pandas as pd
 
-from .config import ATIVOS_YAHOO, PASSOS_NIVEIS_FIXOS, AppSettings, load_settings
+from .config import (
+    ASSET_DESCRIPTIONS,
+    ASSET_LABELS,
+    ATIVOS_YAHOO,
+    PASSOS_NIVEIS_FIXOS,
+    AppSettings,
+    load_settings,
+)
 from .domain import DashboardState, SourceHealth
 from .indicators import (
     calcular_niveis_fixos,
@@ -11,9 +18,12 @@ from .indicators import (
     calcular_variacao,
     preparar_frame_diario,
     resample_para_4h,
+    serialize_indicator_frame,
+    serialize_ohlc,
     ultimo_valor,
 )
 from .providers import baixar_fred_series, baixar_yahoo, data_mais_recente, timestamp_local
+from .settings_store import build_settings_payload
 from .storage import ArtifactStore
 from .strategy import (
     analisar_ativo_operacional,
@@ -30,6 +40,151 @@ def _configure_logging() -> None:
     if logging.getLogger().handlers:
         return
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+
+
+def _prepare_indicator_frame(frame: pd.DataFrame, settings: AppSettings) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    enriched = frame.copy()
+    enriched["PMD"] = (enriched["High"] + enriched["Low"]) / 2
+    enriched["EMA_FAST"] = enriched["PMD"].ewm(span=settings.market.strategy_ema_fast, adjust=False).mean()
+    enriched["EMA_SLOW"] = enriched["PMD"].ewm(span=settings.market.strategy_ema_slow, adjust=False).mean()
+    enriched["RSI"] = calcular_rsi(enriched["Close"], settings.market.rsi_period)
+    return enriched
+
+
+def _build_market_overview(
+    generated_at: str,
+    source_health: list[SourceHealth],
+    settings: AppSettings,
+    macro_context: Any,
+) -> dict[str, Any]:
+    ok_sources = len([item for item in source_health if item.ok])
+    return {
+        "title": "Menu Principal",
+        "subtitle": "Panorama geral do mercado e a proposta operacional do MacroFlow.",
+        "generated_at": generated_at,
+        "headline": macro_context.headline,
+        "cards": [
+            {
+                "label": "Regime atual",
+                "value": macro_context.regime,
+                "detail": macro_context.motivo_nao_operar if macro_context.nao_operar else "Fluxo macro elegível para leitura operacional.",
+            },
+            {
+                "label": "Score institucional",
+                "value": str(macro_context.score),
+                "detail": "Combina DXY, US10Y e SPX para validar contexto de risco.",
+            },
+            {
+                "label": "Saúde das fontes",
+                "value": f"{ok_sources}/{len(source_health)}",
+                "detail": "Fontes monitoradas com bloqueio explícito quando houver degradação.",
+            },
+            {
+                "label": "Timeframe de visualização",
+                "value": settings.market.chart_default_timeframe,
+                "detail": "Pode ser alterado na aba Configurações sem perder a consistência do dashboard.",
+            },
+        ],
+        "macroflow_does": [
+            "Lê o contexto macro com DXY, Tesouro americano e SPX antes de considerar qualquer trade.",
+            "Transforma PMD, MME9 e MME21 em um motor técnico determinístico, explicável e auditável.",
+            "Bloqueia a operação quando o score institucional fica abaixo do mínimo, quando há divergência macro ou quando a fonte degrada.",
+            "Entrega uma leitura local com persistência em JSON e Excel para consulta, auditoria e tomada de decisão.",
+        ],
+        "market_notes": [
+            "O MacroFlow trata o macro como filtro institucional e o setup técnico como gatilho operacional.",
+            "Os proxies públicos continuam ativos até a entrada de feed real para WIN e WDO.",
+            "O botão Iniciar Macroflow atualiza os dados e recompõe todos os módulos do dashboard.",
+        ],
+    }
+
+
+def _build_market_asset_payload(
+    asset: str,
+    ticker: str,
+    intraday_4h: pd.DataFrame,
+    daily_frame: pd.DataFrame,
+    settings: AppSettings,
+) -> dict[str, Any]:
+    label = ASSET_LABELS.get(asset, asset)
+    intraday_indicator = _prepare_indicator_frame(intraday_4h, settings)
+    preco_atual, _, variacao_pct, volume_4h = calcular_variacao(intraday_4h)
+    latest_daily = daily_frame.iloc[-1] if not daily_frame.empty else None
+
+    latest_indicators = {
+        "price": preco_atual,
+        "change_pct_4h": variacao_pct,
+        "volume_4h": volume_4h,
+        "pmd": float(latest_daily["PMD"]) if latest_daily is not None else None,
+        "ema_fast": float(latest_daily["EMA_FAST"]) if latest_daily is not None else None,
+        "ema_slow": float(latest_daily["EMA_SLOW"]) if latest_daily is not None else None,
+        "rsi_daily": float(latest_daily["RSI"]) if latest_daily is not None else None,
+        "default_timeframe": settings.market.chart_default_timeframe,
+    }
+
+    return {
+        "asset": asset,
+        "label": label,
+        "ticker": ticker,
+        "description": ASSET_DESCRIPTIONS.get(asset, "Ativo monitorado pelo MacroFlow."),
+        "latest": latest_indicators,
+        "charts": {
+            "4H": {
+                "label": "4 horas",
+                "candles": serialize_ohlc(intraday_4h),
+                "indicators": serialize_indicator_frame(intraday_indicator),
+            },
+            "1D": {
+                "label": "Diário",
+                "candles": serialize_ohlc(daily_frame),
+                "indicators": serialize_indicator_frame(daily_frame),
+            },
+        },
+        "indicator_notes": [
+            "PMD resume a faixa média do candle e serve de base para a leitura estrutural.",
+            f"MME{settings.market.strategy_ema_fast} acompanha momentum de curto prazo.",
+            f"MME{settings.market.strategy_ema_slow} define a tendência principal e o trailing stop.",
+            f"RSI({settings.market.rsi_period}) ajuda a perceber aceleração e perda de força.",
+        ],
+    }
+
+
+def _build_news_center() -> dict[str, Any]:
+    return {
+        "title": "Notícias do Mercado Financeiro",
+        "status": "Backlog estruturado para a próxima implementação",
+        "summary": "Este módulo foi preparado para receber notícias, calendário econômico, resumos operacionais e leitura de sentimento sem misturar heurística com o motor determinístico do trade.",
+        "sources": [
+            {
+                "title": "Calendário econômico",
+                "source": "Investing / provedores equivalentes",
+                "description": "Capturar eventos de alto impacto, consenso, dado realizado e surpresa macro.",
+            },
+            {
+                "title": "Noticiário financeiro global",
+                "source": "Google News / provedores especializados",
+                "description": "Consolidar manchetes relevantes para juros, moedas, commodities, ações e risco geopolítico.",
+            },
+            {
+                "title": "Sentimento e viés",
+                "source": "Pipeline próprio de classificação",
+                "description": "Separar notícias pró-risco, aversão a risco, inflação, crescimento, liquidez e choque geopolítico.",
+            },
+        ],
+        "bias_framework": [
+            "Mapear cada notícia para temas macro: inflação, emprego, política monetária, crédito, energia, conflito e China.",
+            "Gerar um viés agregado por janela temporal, sem deixar o noticiário sobrescrever o filtro institucional.",
+            "Cruzar surpresa macro do calendário com o regime corrente para evitar leituras isoladas ou emocionais.",
+        ],
+        "implementation_tasks": [
+            "Selecionar fonte confiável para calendário econômico com dados estruturados.",
+            "Definir provedor de notícias com política clara de uso, frequência e deduplicação.",
+            "Criar um classificador de impacto e sentimento com trilha de auditoria por notícia.",
+            "Adicionar score de viés noticioso como camada complementar, nunca como motor autônomo de entrada.",
+        ],
+    }
 
 
 def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
@@ -148,6 +303,10 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         )
 
     terminal_report = montar_relatorio_terminal(macro_context, decisions)
+    market_assets = [
+        _build_market_asset_payload(asset, ticker, intraday_frames.get(asset, pd.DataFrame()), daily_frames.get(asset, pd.DataFrame()), settings)
+        for asset, ticker in ATIVOS_YAHOO.items()
+    ]
     dashboard_state = DashboardState(
         generated_at=generated_at,
         macro_context=macro_context,
@@ -162,7 +321,12 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
             ),
             "blocked": macro_context.nao_operar,
             "excel_path": str(settings.storage.excel_path),
+            "default_chart_timeframe": settings.market.chart_default_timeframe,
         },
+        market_overview=_build_market_overview(generated_at, source_health, settings, macro_context),
+        market_assets=market_assets,
+        news_center=_build_news_center(),
+        settings_panel=build_settings_payload(settings),
     )
 
     snapshot = snapshot_from_state(macro_context, decisions, generated_at)
