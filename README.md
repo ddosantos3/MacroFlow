@@ -1,6 +1,6 @@
 # MacroFlow
 
-Atualizacao atual: o MacroFlow agora inclui motor quant deterministico com `VWAP`, `POC`, `ATR`, `Bollinger`, `OBV`, `ADX`, score 0-100, classificacao de regime, risco por volatilidade, relatorio estruturado e alerta automatico por e-mail. A camada LLM, quando habilitada, apenas explica os dados e nao decide entrada.
+Atualizacao atual: o MacroFlow agora inclui motor quant deterministico com `VWAP`, `POC`, `ATR`, `Bollinger`, `OBV`, `ADX`, score 0-100, classificacao de regime, risco por volatilidade, relatorio estruturado, alerta automatico por e-mail, calendario economico e chat Jarvis. A camada LLM, quando habilitada, apenas explica os dados e nao decide entrada.
 
 MacroFlow agora é uma plataforma local de inteligência macro + execução disciplinada para trading, com três pilares:
 
@@ -14,12 +14,14 @@ O projeto foi refatorado para separar ingestão, indicadores, estratégia, persi
 
 A aba de indicadores agora tambem mostra leitura quant por ativo: score, regime, sinal deterministico, VWAP, POC, ADX, ATR, volume, volatilidade e explicacao operacional.
 
+O dashboard tambem ganhou o `Jarvis - Trader Quantitativo`, acessado pelo botao flutuante no canto inferior direito. Ele usa o `prompt.txt`, o ultimo `dashboard_state.json`, os relatorios quant, decisoes operacionais e eventos do calendario economico como contexto de conversa.
+
 O frontend local foi reorganizado em abas funcionais:
 
 - `Menu Principal`: panorama geral do mercado e explicação do que o MacroFlow faz;
 - `Análise Gráfica`: candles de todos os ativos monitorados;
 - `Indicadores Técnicos`: linhas de PMD, MME9, MME21 e RSI por ativo;
-- `Notícias do Mercado Financeiro`: módulo planejado, com backlog e arquitetura de integração;
+- `Notícias do Mercado Financeiro`: calendario economico estruturado com filtro por pais e criticidade de 1, 2 ou 3 touros;
 - `Configurações`: edição dos parâmetros principais diretamente pela interface, com gravação no `.env`.
 
 O botão `Iniciar Macroflow` agora fica logo abaixo de `Configurações` no menu lateral e recompõe os dados do dashboard sob demanda.
@@ -66,6 +68,8 @@ Novos modulos da camada quant e alertas:
 - `quant.py`: indicadores avancados, score, regime, regras de entrada/saida e risco por ATR;
 - `llm.py`: explicacao textual opcional com fallback local, sem decidir trade;
 - `emailer.py`: envio SMTP com gatilho por novo sinal ou relatorio diario;
+- `economic_calendar.py`: calendario economico com pais, criticidade, surpresa, projecao e vies macro;
+- `jarvis.py`: chat Jarvis com prompt local, contexto do dashboard e fallback analitico local;
 - `settings_store.py`: exposicao dos parametros editaveis no dashboard.
 
 - `providers.py`: integrações com `FRED` e `Yahoo Finance`
@@ -122,6 +126,14 @@ O e-mail usa `smtplib` e fica desabilitado por padrao. Para ativar, configure `E
 
 O LLM e opcional (`MACROFLOW_LLM_ENABLED=true`) e so gera explicacao textual. O sinal, entrada, stop, alvo e sizing continuam 100% deterministicos.
 
+## Calendario economico e Jarvis
+
+A aba `Noticias do Mercado Financeiro` agora carrega eventos de calendario economico via Fair Economy / Forex Factory por padrao, incluindo pais, categoria, evento, actual, forecast, previous, criticidade em 1, 2 ou 3 touros, surpresa numerica quando disponivel, projecao textual e vies macro estimado. Trading Economics permanece como provider configuravel para quem tiver credencial propria.
+
+O filtro visual permite selecionar pais e criticidade diretamente na tela. A coleta padrao usa `United States,Brazil,Euro Area,China`, janela de 1 dia para tras e 7 dias para frente.
+
+O `Jarvis - Trader Quantitativo` fica no canto inferior direito do dashboard. Ele usa `prompt.txt` e o ultimo estado coletado do MacroFlow. Se `MACROFLOW_LLM_ENABLED=false`, responde em modo local com uma leitura resumida; se estiver habilitado com `OPENAI_API_KEY`, usa o LLM com `store=false` e os mesmos guardrails deterministas.
+
 ## Identidade visual
 
 O dashboard foi construído com um design system inspirado diretamente na imagem `referência_visual.png`:
@@ -171,6 +183,11 @@ Variáveis principais:
 - `EMAIL_TO`
 - `MACROFLOW_LLM_ENABLED`
 - `OPENAI_API_KEY`
+- `MACROFLOW_CALENDAR_ENABLED`
+- `TRADING_ECONOMICS_API_KEY`
+- `MACROFLOW_CALENDAR_COUNTRIES`
+- `MACROFLOW_CALENDAR_IMPORTANCE_MIN`
+- `MACROFLOW_JARVIS_PROMPT_PATH`
 
 ## Execução
 

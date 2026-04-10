@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from .config import AppSettings, load_settings
 from .domain import to_plain
+from .jarvis import generate_jarvis_reply
 from .pipeline import executar_coleta
 from .settings_store import build_settings_payload, reload_settings, update_env_file
 from .storage import ArtifactStore
@@ -63,12 +64,20 @@ def _empty_state(settings: AppSettings) -> dict[str, object]:
         },
         "market_assets": [],
         "news_center": {
-            "title": "Notícias do Mercado Financeiro",
-            "status": "Backlog estruturado para implementação",
-            "summary": "Este módulo ainda será conectado a fontes externas e classificação de viés.",
-            "sources": [],
-            "bias_framework": [],
-            "implementation_tasks": [],
+            "title": "Noticias do Mercado Financeiro",
+            "status": "aguardando_coleta",
+            "summary": "Execute a coleta para carregar o calendario economico e seus impactos.",
+            "source": "Fair Economy / Forex Factory",
+            "source_url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+            "window": {},
+            "events": [],
+            "countries": [],
+            "configured_countries": [],
+            "importance_levels": [1, 2, 3],
+            "high_impact_count": 0,
+            "risk_bias": "neutro",
+            "filters": {"country": "ALL", "importance": "ALL"},
+            "agent_context_note": "Eventos do calendario entram no contexto do Jarvis como fonte auxiliar.",
         },
         "settings_panel": settings_panel,
         "quant_reports": [],
@@ -129,6 +138,17 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Falha ao salvar configurações: {exc}") from exc
         return JSONResponse({"ok": True, "settings": build_settings_payload(settings)})
+
+    @app.post("/api/jarvis/chat")
+    async def jarvis_chat(request: Request) -> JSONResponse:
+        payload = await request.json()
+        message = str(payload.get("message", "")).strip()
+        history = payload.get("history", [])
+        if history is not None and not isinstance(history, list):
+            raise HTTPException(status_code=400, detail="Historico do Jarvis invalido.")
+        state = store.load_dashboard_state() or _empty_state(settings)
+        response = generate_jarvis_reply(message, history, state, settings)
+        return JSONResponse({"ok": True, **response})
 
     @app.get("/health")
     async def health() -> JSONResponse:

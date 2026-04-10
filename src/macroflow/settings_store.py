@@ -3,7 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import EmailConfig, LLMConfig, PROJECT_ROOT, AppSettings, MarketConfig, QuantConfig, StorageConfig, load_settings
+from .config import (
+    CalendarConfig,
+    EmailConfig,
+    JarvisConfig,
+    LLMConfig,
+    PROJECT_ROOT,
+    AppSettings,
+    MarketConfig,
+    QuantConfig,
+    StorageConfig,
+    load_settings,
+)
 
 
 FIELD_GROUPS: list[dict[str, Any]] = [
@@ -186,6 +197,24 @@ FIELD_GROUPS: list[dict[str, Any]] = [
             {"env": "MACROFLOW_LLM_TIMEOUT_SECONDS", "label": "Timeout LLM", "type": "number", "step": "1", "help": "Timeout da chamada HTTP ao LLM."},
         ],
     },
+    {
+        "id": "calendario_jarvis",
+        "title": "Calendario Economico e Jarvis",
+        "description": "Fonte de eventos macro e contexto conversacional do Jarvis - Trader Quantitativo.",
+        "fields": [
+            {"env": "MACROFLOW_CALENDAR_ENABLED", "label": "Habilitar calendario", "type": "select", "options": ["true", "false"], "help": "Ativa a coleta do calendario economico no refresh."},
+            {"env": "MACROFLOW_CALENDAR_PROVIDER", "label": "Provider calendario", "type": "select", "options": ["forexfactory", "tradingeconomics"], "help": "forexfactory funciona sem chave; tradingeconomics exige permissao na API."},
+            {"env": "MACROFLOW_CALENDAR_COUNTRIES", "label": "Paises do calendario", "type": "text", "placeholder": "United States,Brazil,Euro Area,China", "help": "Lista separada por virgula. Ex: United States,Brazil."},
+            {"env": "MACROFLOW_CALENDAR_IMPORTANCE_MIN", "label": "Criticidade minima", "type": "select", "options": ["1", "2", "3"], "help": "1, 2 ou 3 touros. O filtro visual continua disponivel na aba Noticias."},
+            {"env": "MACROFLOW_CALENDAR_DAYS_BACK", "label": "Dias para tras", "type": "number", "step": "1", "help": "Janela retroativa do calendario."},
+            {"env": "MACROFLOW_CALENDAR_DAYS_AHEAD", "label": "Dias para frente", "type": "number", "step": "1", "help": "Janela futura do calendario."},
+            {"env": "MACROFLOW_CALENDAR_MAX_EVENTS", "label": "Maximo de eventos", "type": "number", "step": "1", "help": "Limite de eventos salvos no dashboard."},
+            {"env": "TRADING_ECONOMICS_API_KEY", "label": "Trading Economics key", "type": "password", "help": "Opcional. Padrao guest:guest; use sua credencial se tiver.", "secret": True},
+            {"env": "MACROFLOW_JARVIS_PROMPT_PATH", "label": "Prompt do Jarvis", "type": "text", "placeholder": "prompt.txt", "help": "Caminho do prompt usado pelo chat Jarvis."},
+            {"env": "MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS", "label": "Eventos no contexto", "type": "number", "step": "1", "help": "Quantidade maxima de eventos enviados ao Jarvis."},
+            {"env": "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES", "label": "Historico do chat", "type": "number", "step": "1", "help": "Quantidade maxima de mensagens recentes enviadas ao Jarvis."},
+        ],
+    },
 ]
 
 
@@ -238,6 +267,17 @@ def _current_value(settings: AppSettings, env_name: str) -> str:
         "OPENAI_API_KEY": settings.llm.api_key,
         "OPENAI_MODEL": settings.llm.model,
         "MACROFLOW_LLM_TIMEOUT_SECONDS": settings.llm.timeout_seconds,
+        "MACROFLOW_CALENDAR_ENABLED": str(settings.calendar.enabled).lower(),
+        "MACROFLOW_CALENDAR_PROVIDER": settings.calendar.provider,
+        "MACROFLOW_CALENDAR_COUNTRIES": settings.calendar.countries,
+        "MACROFLOW_CALENDAR_IMPORTANCE_MIN": settings.calendar.importance_min,
+        "MACROFLOW_CALENDAR_DAYS_BACK": settings.calendar.days_back,
+        "MACROFLOW_CALENDAR_DAYS_AHEAD": settings.calendar.days_ahead,
+        "MACROFLOW_CALENDAR_MAX_EVENTS": settings.calendar.max_events,
+        "TRADING_ECONOMICS_API_KEY": settings.calendar.api_key,
+        "MACROFLOW_JARVIS_PROMPT_PATH": settings.jarvis.prompt_path,
+        "MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS": settings.jarvis.max_context_events,
+        "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES": settings.jarvis.max_history_messages,
     }
     value = mapping.get(env_name, "")
     return "" if value is None else str(value)
@@ -294,7 +334,7 @@ def update_env_file(values: dict[str, Any], project_root: Path | None = None) ->
     env_path = _env_path(project_root)
     existing_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
     indexed_keys: dict[str, int] = {}
-    secret_keys = {"FRED_API_KEY", "EMAIL_PASSWORD", "OPENAI_API_KEY"}
+    secret_keys = {"FRED_API_KEY", "EMAIL_PASSWORD", "OPENAI_API_KEY", "TRADING_ECONOMICS_API_KEY"}
     for idx, line in enumerate(existing_lines):
         if "=" in line and not line.strip().startswith("#"):
             indexed_keys[line.split("=", 1)[0].strip()] = idx
@@ -342,6 +382,9 @@ def reload_settings(target: AppSettings) -> AppSettings:
             return value
 
         runtime_dir = Path(env_str("MACROFLOW_RUNTIME_DIR", str(target.storage.runtime_dir)))
+        jarvis_prompt_path = Path(env_str("MACROFLOW_JARVIS_PROMPT_PATH", str(target.jarvis.prompt_path)))
+        if not jarvis_prompt_path.is_absolute():
+            jarvis_prompt_path = target.storage.project_root / jarvis_prompt_path
         fresh = AppSettings(
             storage=StorageConfig(
                 project_root=target.storage.project_root,
@@ -426,6 +469,23 @@ def reload_settings(target: AppSettings) -> AppSettings:
                 model=env_str("OPENAI_MODEL", target.llm.model),
                 timeout_seconds=env_int("MACROFLOW_LLM_TIMEOUT_SECONDS", target.llm.timeout_seconds),
             ),
+            calendar=CalendarConfig(
+                enabled=env_bool("MACROFLOW_CALENDAR_ENABLED", target.calendar.enabled),
+                provider=env_str("MACROFLOW_CALENDAR_PROVIDER", target.calendar.provider),
+                api_key=env_str("TRADING_ECONOMICS_API_KEY", target.calendar.api_key),
+                countries=env_str("MACROFLOW_CALENDAR_COUNTRIES", target.calendar.countries),
+                importance_min=env_int("MACROFLOW_CALENDAR_IMPORTANCE_MIN", target.calendar.importance_min),
+                days_back=env_int("MACROFLOW_CALENDAR_DAYS_BACK", target.calendar.days_back),
+                days_ahead=env_int("MACROFLOW_CALENDAR_DAYS_AHEAD", target.calendar.days_ahead),
+                max_events=env_int("MACROFLOW_CALENDAR_MAX_EVENTS", target.calendar.max_events),
+            ),
+            jarvis=JarvisConfig(
+                prompt_path=jarvis_prompt_path,
+                max_context_events=env_int("MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS", target.jarvis.max_context_events),
+                max_history_messages=env_int(
+                    "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES", target.jarvis.max_history_messages
+                ),
+            ),
             host=env_str("MACROFLOW_HOST", target.host),
             port=env_int("MACROFLOW_PORT", target.port),
         )
@@ -434,6 +494,8 @@ def reload_settings(target: AppSettings) -> AppSettings:
     target.quant = fresh.quant
     target.email = fresh.email
     target.llm = fresh.llm
+    target.calendar = fresh.calendar
+    target.jarvis = fresh.jarvis
     target.host = fresh.host
     target.port = fresh.port
     return target

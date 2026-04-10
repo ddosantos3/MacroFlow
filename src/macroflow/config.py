@@ -129,12 +129,35 @@ class LLMConfig:
 
 
 @dataclass(slots=True)
+class CalendarConfig:
+    enabled: bool = True
+    provider: str = "forexfactory"
+    api_key: str = "guest:guest"
+    countries: str = "United States,Brazil,Euro Area,China"
+    importance_min: int = 1
+    days_back: int = 1
+    days_ahead: int = 7
+    timeout_seconds: int = 15
+    max_events: int = 80
+
+
+@dataclass(slots=True)
+class JarvisConfig:
+    prompt_path: Path = PROJECT_ROOT / "prompt.txt"
+    max_history_messages: int = 8
+    max_context_events: int = 12
+    max_context_assets: int = 6
+
+
+@dataclass(slots=True)
 class AppSettings:
     storage: StorageConfig = field(default_factory=StorageConfig)
     market: MarketConfig = field(default_factory=MarketConfig)
     quant: QuantConfig = field(default_factory=QuantConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    calendar: CalendarConfig = field(default_factory=CalendarConfig)
+    jarvis: JarvisConfig = field(default_factory=JarvisConfig)
     host: str = "127.0.0.1"
     port: int = 8000
 
@@ -248,6 +271,26 @@ def load_settings() -> AppSettings:
         model=_env_str("OPENAI_MODEL", "gpt-4.1-mini"),
         timeout_seconds=_env_int("MACROFLOW_LLM_TIMEOUT_SECONDS", 20),
     )
+    calendar = CalendarConfig(
+        enabled=_env_bool("MACROFLOW_CALENDAR_ENABLED", True),
+        provider=_env_str("MACROFLOW_CALENDAR_PROVIDER", "forexfactory").lower(),
+        api_key=_env_str("TRADING_ECONOMICS_API_KEY", "guest:guest"),
+        countries=_env_str("MACROFLOW_CALENDAR_COUNTRIES", "United States,Brazil,Euro Area,China"),
+        importance_min=_env_int("MACROFLOW_CALENDAR_IMPORTANCE_MIN", 1),
+        days_back=_env_int("MACROFLOW_CALENDAR_DAYS_BACK", 1),
+        days_ahead=_env_int("MACROFLOW_CALENDAR_DAYS_AHEAD", 7),
+        timeout_seconds=_env_int("MACROFLOW_CALENDAR_TIMEOUT_SECONDS", 15),
+        max_events=_env_int("MACROFLOW_CALENDAR_MAX_EVENTS", 80),
+    )
+    jarvis_prompt_path = Path(_env_str("MACROFLOW_JARVIS_PROMPT_PATH", str(PROJECT_ROOT / "prompt.txt"))).expanduser()
+    if not jarvis_prompt_path.is_absolute():
+        jarvis_prompt_path = PROJECT_ROOT / jarvis_prompt_path
+    jarvis = JarvisConfig(
+        prompt_path=jarvis_prompt_path,
+        max_history_messages=_env_int("MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES", 8),
+        max_context_events=_env_int("MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS", 12),
+        max_context_assets=_env_int("MACROFLOW_JARVIS_MAX_CONTEXT_ASSETS", 6),
+    )
 
     return AppSettings(
         storage=storage,
@@ -255,6 +298,8 @@ def load_settings() -> AppSettings:
         quant=quant,
         email=email,
         llm=llm,
+        calendar=calendar,
+        jarvis=jarvis,
         host=_env_str("MACROFLOW_HOST", "127.0.0.1"),
         port=_env_int("MACROFLOW_PORT", 8000),
     )

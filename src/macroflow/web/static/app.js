@@ -2,6 +2,9 @@ const state = {
   dashboard: null,
   currentTab: "menu-principal",
   currentTimeframe: "4H",
+  newsCountry: "ALL",
+  newsImportance: "ALL",
+  jarvisHistory: [],
 };
 
 const formatNumber = (value, digits = 2) => {
@@ -305,19 +308,58 @@ const renderNews = (newsCenter) => {
   document.getElementById("news-title").textContent = newsCenter.title || "Notícias do Mercado Financeiro";
   document.getElementById("news-summary").textContent = newsCenter.summary || "";
   document.getElementById("news-status").textContent = newsCenter.status || "planejamento";
-  document.getElementById("news-sources").innerHTML = (newsCenter.sources || []).map((item) => `
-    <div class="stack-item">
-      <p class="metric-label">${escapeHtml(item.source)}</p>
-      <strong>${escapeHtml(item.title)}</strong>
-      <p class="muted">${escapeHtml(item.description)}</p>
-    </div>
+  document.getElementById("news-risk-bias").textContent = `Viés ${newsCenter.risk_bias || "neutro"}`;
+  document.getElementById("news-source-note").textContent = `${newsCenter.source || "Trading Economics"} | ${newsCenter.window?.start || "-"} a ${newsCenter.window?.end || "-"}`;
+
+  const countryFilter = document.getElementById("news-country-filter");
+  const sourceCountries = newsCenter.countries?.length ? newsCenter.countries : (newsCenter.configured_countries || []);
+  const countries = ["ALL", ...sourceCountries];
+  if (!countries.includes(state.newsCountry)) state.newsCountry = "ALL";
+  countryFilter.innerHTML = countries.map((country) => `
+    <option value="${escapeHtml(country)}" ${state.newsCountry === country ? "selected" : ""}>
+      ${country === "ALL" ? "Todos os países" : escapeHtml(country)}
+    </option>
   `).join("");
-  document.getElementById("news-bias-framework").innerHTML = (newsCenter.bias_framework || [])
-    .map((item) => `<li>${escapeHtml(item)}</li>`)
-    .join("");
-  document.getElementById("news-implementation").innerHTML = (newsCenter.implementation_tasks || [])
-    .map((item) => `<li>${escapeHtml(item)}</li>`)
-    .join("");
+  document.getElementById("news-importance-filter").value = state.newsImportance;
+
+  countryFilter.onchange = () => {
+    state.newsCountry = countryFilter.value;
+    renderNews(state.dashboard?.news_center || {});
+  };
+  document.getElementById("news-importance-filter").onchange = (event) => {
+    state.newsImportance = event.target.value;
+    renderNews(state.dashboard?.news_center || {});
+  };
+
+  const events = (newsCenter.events || []).filter((event) => {
+    const countryMatch = state.newsCountry === "ALL" || event.country === state.newsCountry;
+    const importanceMatch = state.newsImportance === "ALL" || String(event.importance) === state.newsImportance;
+    return countryMatch && importanceMatch;
+  });
+  const host = document.getElementById("economic-calendar-grid");
+  if (!events.length) {
+    host.innerHTML = "<article class='panel info-card'><p class='muted'>Sem eventos para os filtros selecionados.</p></article>";
+    return;
+  }
+  host.innerHTML = events.map((event) => `
+    <article class="calendar-event panel">
+      <div class="calendar-event-top">
+        <div>
+          <p class="eyebrow">${escapeHtml(event.country)} | ${escapeHtml(event.category)}</p>
+          <h3>${escapeHtml(event.event)}</h3>
+          <p class="muted">${escapeHtml(event.date || "-")}</p>
+        </div>
+        <span class="tag">${escapeHtml(event.importance_label || `${event.importance} touros`)}</span>
+      </div>
+      <div class="calendar-values">
+        <div><p class="metric-label">Actual</p><strong>${escapeHtml(event.actual || "-")}</strong></div>
+        <div><p class="metric-label">Forecast</p><strong>${escapeHtml(event.forecast || event.te_forecast || "-")}</strong></div>
+        <div><p class="metric-label">Previous</p><strong>${escapeHtml(event.previous || "-")}</strong></div>
+        <div><p class="metric-label">Viés</p><strong>${escapeHtml(event.market_bias || "monitorar")}</strong></div>
+      </div>
+      <p class="muted">${escapeHtml(event.projection || "Monitorar impacto com DXY, US10Y e SPX.")}</p>
+    </article>
+  `).join("");
 };
 
 const renderSettings = (settingsPanel) => {
@@ -451,12 +493,64 @@ const saveSettings = async () => {
   }
 };
 
+const addJarvisMessage = (role, content) => {
+  const host = document.getElementById("jarvis-messages");
+  if (!host) return;
+  const message = document.createElement("div");
+  message.className = `jarvis-message ${role}`;
+  message.innerHTML = `<p>${escapeHtml(content).replaceAll("\n", "<br>")}</p>`;
+  host.appendChild(message);
+  host.scrollTop = host.scrollHeight;
+};
+
+const toggleJarvis = (open) => {
+  document.getElementById("jarvis-panel")?.classList.toggle("open", open);
+  document.getElementById("jarvis-toggle")?.classList.toggle("hidden", open);
+  if (open && !state.jarvisHistory.length) {
+    addJarvisMessage(
+      "assistant",
+      "Jarvis online. Pergunte sobre o viés, um ativo específico ou como o calendário econômico afeta o cenário atual.",
+    );
+  }
+};
+
+const submitJarvisMessage = async (event) => {
+  event.preventDefault();
+  const input = document.getElementById("jarvis-input");
+  const message = String(input.value || "").trim();
+  if (!message) return;
+  input.value = "";
+  addJarvisMessage("user", message);
+  state.jarvisHistory.push({ role: "user", content: message });
+
+  const thinking = "Analisando snapshot do MacroFlow...";
+  addJarvisMessage("assistant pending", thinking);
+  try {
+    const response = await fetch("/api/jarvis/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history: state.jarvisHistory.slice(-8) }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Falha ao consultar o Jarvis.");
+    document.querySelector("#jarvis-messages .pending:last-child")?.remove();
+    addJarvisMessage("assistant", payload.reply || "Sem resposta do Jarvis.");
+    state.jarvisHistory.push({ role: "assistant", content: payload.reply || "" });
+  } catch (error) {
+    document.querySelector("#jarvis-messages .pending:last-child")?.remove();
+    addJarvisMessage("assistant", error.message);
+  }
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => setActiveTab(button.dataset.tab));
   });
   document.getElementById("refresh-button")?.addEventListener("click", refreshDashboard);
   document.getElementById("save-settings-button")?.addEventListener("click", saveSettings);
+  document.getElementById("jarvis-toggle")?.addEventListener("click", () => toggleJarvis(true));
+  document.getElementById("jarvis-close")?.addEventListener("click", () => toggleJarvis(false));
+  document.getElementById("jarvis-form")?.addEventListener("submit", submitJarvisMessage);
   setActiveTab(state.currentTab);
   try {
     await loadDashboard();

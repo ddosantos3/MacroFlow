@@ -12,6 +12,7 @@ from .config import (
     load_settings,
 )
 from .domain import DashboardState, SourceHealth
+from .economic_calendar import fetch_economic_calendar
 from .emailer import processar_alertas_email
 from .indicators import (
     calcular_niveis_fixos,
@@ -204,39 +205,22 @@ def _format_quant_terminal(reports: list[dict[str, Any]], email_status: dict[str
     return "\n".join(lines)
 
 
-def _build_news_center() -> dict[str, Any]:
+def _build_news_center(calendar_payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "title": "Notícias do Mercado Financeiro",
-        "status": "Backlog estruturado para a próxima implementação",
-        "summary": "Este módulo foi preparado para receber notícias, calendário econômico, resumos operacionais e leitura de sentimento sem misturar heurística com o motor determinístico do trade.",
-        "sources": [
-            {
-                "title": "Calendário econômico",
-                "source": "Investing / provedores equivalentes",
-                "description": "Capturar eventos de alto impacto, consenso, dado realizado e surpresa macro.",
-            },
-            {
-                "title": "Noticiário financeiro global",
-                "source": "Google News / provedores especializados",
-                "description": "Consolidar manchetes relevantes para juros, moedas, commodities, ações e risco geopolítico.",
-            },
-            {
-                "title": "Sentimento e viés",
-                "source": "Pipeline próprio de classificação",
-                "description": "Separar notícias pró-risco, aversão a risco, inflação, crescimento, liquidez e choque geopolítico.",
-            },
-        ],
-        "bias_framework": [
-            "Mapear cada notícia para temas macro: inflação, emprego, política monetária, crédito, energia, conflito e China.",
-            "Gerar um viés agregado por janela temporal, sem deixar o noticiário sobrescrever o filtro institucional.",
-            "Cruzar surpresa macro do calendário com o regime corrente para evitar leituras isoladas ou emocionais.",
-        ],
-        "implementation_tasks": [
-            "Selecionar fonte confiável para calendário econômico com dados estruturados.",
-            "Definir provedor de notícias com política clara de uso, frequência e deduplicação.",
-            "Criar um classificador de impacto e sentimento com trilha de auditoria por notícia.",
-            "Adicionar score de viés noticioso como camada complementar, nunca como motor autônomo de entrada.",
-        ],
+        "title": "Noticias do Mercado Financeiro",
+        "status": calendar_payload.get("status", "indisponivel"),
+        "summary": calendar_payload.get("message", "Calendario economico ainda sem dados carregados."),
+        "source": calendar_payload.get("source", "Fair Economy / Forex Factory"),
+        "source_url": calendar_payload.get("source_url"),
+        "window": calendar_payload.get("window", {}),
+        "events": calendar_payload.get("events", []),
+        "countries": calendar_payload.get("countries", []),
+        "configured_countries": calendar_payload.get("configured_countries", []),
+        "importance_levels": calendar_payload.get("importance_levels", [1, 2, 3]),
+        "high_impact_count": calendar_payload.get("high_impact_count", 0),
+        "risk_bias": calendar_payload.get("risk_bias", "neutro"),
+        "filters": {"country": "ALL", "importance": "ALL"},
+        "agent_context_note": "Eventos do calendario entram no contexto do Jarvis como fonte auxiliar; eles nao substituem as regras deterministicas do motor quant.",
     }
 
 
@@ -264,6 +248,15 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
             ok=dados_fred_ok,
             message="DXY e US10Y carregados com sucesso." if dados_fred_ok else "FRED indisponível ou sem API key.",
             last_updated=data_mais_recente(dxy_series if not dxy_series.empty else us10y_series),
+        )
+    )
+    calendar_payload = fetch_economic_calendar(settings)
+    source_health.append(
+        SourceHealth(
+            source=f"Calendario:{calendar_payload.get('source', 'Trading Economics')}",
+            ok=bool(calendar_payload.get("ok")),
+            message=str(calendar_payload.get("message") or calendar_payload.get("status") or "Calendario economico."),
+            last_updated=generated_at,
         )
     )
 
@@ -405,7 +398,7 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         },
         market_overview=_build_market_overview(generated_at, source_health, settings, macro_context),
         market_assets=market_assets,
-        news_center=_build_news_center(),
+        news_center=_build_news_center(calendar_payload),
         settings_panel=build_settings_payload(settings),
         quant_reports=quant_reports,
         email_status=email_status,

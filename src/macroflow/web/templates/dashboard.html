@@ -116,44 +116,40 @@
         <div class="section-topline">
           <div>
             <p class="eyebrow">Notícias do Mercado Financeiro</p>
-            <h3 id="news-title">Backlog estruturado para o módulo de notícias</h3>
-            <p id="news-summary" class="muted">Esta aba foi preparada para consolidar calendário econômico, notícias relevantes e viés macro de forma auditável.</p>
+            <h3 id="news-title">Calendario economico e impacto macro</h3>
+            <p id="news-summary" class="muted">Eventos economicos carregados para complementar o vies do MacroFlow e do Jarvis.</p>
           </div>
-          <span id="news-status" class="tag subtle">planejamento</span>
+          <div class="news-kpi-stack">
+            <span id="news-status" class="tag subtle">aguardando</span>
+            <span id="news-risk-bias" class="tag">neutro</span>
+          </div>
         </div>
       </article>
 
-      <section class="split-grid">
-        <article class="panel info-card">
-          <div class="card-header">
-            <div>
-              <p class="eyebrow">Fontes planejadas</p>
-              <h3>Coleta e cobertura</h3>
-            </div>
+      <article class="panel info-card calendar-toolbar">
+        <div>
+          <p class="eyebrow">Filtros</p>
+          <h3>País e criticidade</h3>
+          <p id="news-source-note" class="muted">Fonte: Trading Economics</p>
+        </div>
+        <div class="calendar-filters">
+          <div class="setting-field compact-field">
+            <label>País</label>
+            <select id="news-country-filter"></select>
           </div>
-          <div id="news-sources" class="stack-list"></div>
-        </article>
-
-        <article class="panel info-card">
-          <div class="card-header">
-            <div>
-              <p class="eyebrow">Viés e impacto</p>
-              <h3>Como ler o noticiário</h3>
-            </div>
-          </div>
-          <ul id="news-bias-framework" class="list-clean"></ul>
-        </article>
-      </section>
-
-      <article class="panel info-card">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">Próximas tarefas</p>
-            <h3>Roadmap do módulo</h3>
+          <div class="setting-field compact-field">
+            <label>Criticidade</label>
+            <select id="news-importance-filter">
+              <option value="ALL">Todos</option>
+              <option value="1">1 touro</option>
+              <option value="2">2 touros</option>
+              <option value="3">3 touros</option>
+            </select>
           </div>
         </div>
-        <ul id="news-implementation" class="list-clean"></ul>
       </article>
+
+      <section id="economic-calendar-grid" class="calendar-grid"></section>
     </section>
 
     <section class="tab-panel" data-panel="configuracoes">
@@ -175,4 +171,27 @@
     </section>
   </main>
 </div>
+
+<button id="jarvis-toggle" class="jarvis-toggle" type="button" aria-label="Abrir Jarvis Trader Quantitativo">
+  <span class="robot-icon" aria-hidden="true">
+    <span class="robot-eye"></span>
+    <span class="robot-eye"></span>
+  </span>
+</button>
+
+<section id="jarvis-panel" class="jarvis-panel panel" aria-live="polite">
+  <div class="jarvis-header">
+    <div>
+      <p class="eyebrow">Jarvis</p>
+      <h3>Trader Quantitativo</h3>
+      <p class="muted">Conversa baseada na última coleta do MacroFlow.</p>
+    </div>
+    <button id="jarvis-close" class="icon-button" type="button" aria-label="Fechar Jarvis">×</button>
+  </div>
+  <div id="jarvis-messages" class="jarvis-messages"></div>
+  <form id="jarvis-form" class="jarvis-form">
+    <input id="jarvis-input" type="text" autocomplete="off" placeholder="Pergunte: qual o viés para WDO agora?" />
+    <button class="primary-button" type="submit">Enviar</button>
+  </form>
+</section>
 {% endblock %}

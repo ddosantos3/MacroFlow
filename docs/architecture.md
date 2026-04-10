@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Atualizacao: a arquitetura agora inclui uma camada quant deterministica (`quant.py`) e uma camada de alertas (`emailer.py` + `llm.py`). O LLM e apenas explicativo; entrada, saida, score, regime e risco seguem regras de codigo.
+Atualizacao: a arquitetura agora inclui uma camada quant deterministica (`quant.py`), alertas (`emailer.py` + `llm.py`), calendario economico (`economic_calendar.py`) e chat Jarvis (`jarvis.py`). O LLM e apenas explicativo; entrada, saida, score, regime e risco seguem regras de codigo.
 
 Manter o filtro macro original do projeto, substituir o motor operacional por uma leitura determinística baseada em `PMD/MME9/MME21` e entregar isso com uma camada visual confiável para decisão local.
 
@@ -54,6 +54,12 @@ O score quant normalizado de 0 a 100 combina tendencia, volume, volatilidade, ma
 As regras de entrada/saida sao deterministicamente avaliadas no codigo. O LLM nao participa dessa decisao.
 
 `src/macroflow/emailer.py` envia relatorio por SMTP quando existe novo sinal ou quando o envio diario ainda nao ocorreu. `src/macroflow/llm.py` gera explicacao opcional e tem fallback local.
+
+### 3c. Calendario economico e Jarvis
+
+`src/macroflow/economic_calendar.py` coleta eventos do calendario economico via Fair Economy / Forex Factory por padrao, com Trading Economics opcional via credencial propria. A camada normaliza pais, categoria, evento, actual, forecast, previous, criticidade e uma projecao de impacto. Esses eventos entram em `news_center` dentro do `dashboard_state.json`.
+
+`src/macroflow/jarvis.py` le o `prompt.txt`, monta um contexto enxuto com macro, decisoes, relatórios quant e calendario, e responde via endpoint `/api/jarvis/chat`. Quando o LLM esta desabilitado ou indisponivel, o Jarvis responde em modo local sem inventar dados.
 
 ### 4. Persistência
 
