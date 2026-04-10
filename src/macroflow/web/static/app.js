@@ -220,12 +220,19 @@ const renderIndicatorAssets = () => {
   (state.dashboard?.market_assets || []).forEach((asset) => {
     const timeframe = state.currentTimeframe;
     const indicatorPayload = asset.charts?.[timeframe]?.indicators || [];
+    const quantPayload = asset.charts?.[timeframe]?.quant_indicators || [];
+    const quantReport = asset.quant_report || {};
     const decision = decisionMap.get(asset.asset);
     const priceSeries = [
       { color: "#dbc46d", values: indicatorPayload.map((item) => Number(item.close)) },
       { color: "#b9c2cf", values: indicatorPayload.map((item) => Number(item.pmd)) },
       { color: "#92efb4", values: indicatorPayload.map((item) => Number(item.ema_fast)) },
       { color: "#f27e8c", values: indicatorPayload.map((item) => Number(item.ema_slow)) },
+    ];
+    const quantSeries = [
+      { color: "#92efb4", values: quantPayload.map((item) => Number(item.vwap)), strokeWidth: 2.2 },
+      { color: "#dbc46d", values: quantPayload.map((item) => Number(item.vwap_rolling)), strokeWidth: 1.8 },
+      { color: "#f6a04d", values: quantPayload.map((item) => Number(item.poc)), strokeWidth: 1.8 },
     ];
     const rsiSeries = [
       { color: "#92efb4", values: indicatorPayload.map((item) => Number(item.rsi)), strokeWidth: 2.2 },
@@ -245,9 +252,20 @@ const renderIndicatorAssets = () => {
       <div class="indicator-details">
         <div class="stack-list">
           <div class="chart-box indicator-price-chart"></div>
+          <div class="chart-box indicator-quant-chart"></div>
           <div class="chart-box indicator-rsi-chart"></div>
         </div>
         <div class="stack-list">
+          <div class="decision-box quant-decision-box">
+            <p class="metric-label">Score quant / regime / sinal</p>
+            <strong>${formatNumber(quantReport.score, 0)} | ${escapeHtml(quantReport.regime || "-")} | ${escapeHtml(quantReport.signal || "HOLD")}</strong>
+            <p class="muted">${escapeHtml(quantReport.status || "Sem status quant")}</p>
+          </div>
+          <div class="decision-box">
+            <p class="metric-label">VWAP / POC / ADX / ATR</p>
+            <strong>${formatNumber(quantReport.vwap, 4)} / ${formatNumber(quantReport.poc, 4)} / ${formatNumber(quantReport.adx, 2)} / ${formatNumber(quantReport.atr, 4)}</strong>
+            <p class="muted">Volume ${escapeHtml(quantReport.volume || "-")} | volatilidade ${escapeHtml(quantReport.volatilidade || "-")}</p>
+          </div>
           <div class="decision-box">
             <p class="metric-label">PMD / MME9 / MME21</p>
             <strong>${formatNumber(asset.latest?.pmd, 4)} / ${formatNumber(asset.latest?.ema_fast, 4)} / ${formatNumber(asset.latest?.ema_slow, 4)}</strong>
@@ -258,6 +276,10 @@ const renderIndicatorAssets = () => {
             <strong>${formatNumber(asset.latest?.rsi_daily, 2)} | ${decision ? escapeHtml(decision.technical_direction) : "Monitoramento"}</strong>
             <p class="muted">${decision ? `Status ${escapeHtml(decision.execution_status)}` : "Ativo não operacional, exibido para leitura contextual."}</p>
           </div>
+          <div class="decision-box">
+            <p class="metric-label">Analise explicativa</p>
+            <p class="muted">${escapeHtml(quantReport.explanation || "Sem explicacao quant disponivel.")}</p>
+          </div>
           <ul class="list-clean">
             ${(asset.indicator_notes || []).map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
           </ul>
@@ -266,6 +288,7 @@ const renderIndicatorAssets = () => {
     `;
 
     drawLineChart(card.querySelector(".indicator-price-chart"), priceSeries);
+    drawLineChart(card.querySelector(".indicator-quant-chart"), quantSeries);
     drawLineChart(card.querySelector(".indicator-rsi-chart"), rsiSeries, {
       min: 0,
       max: 100,

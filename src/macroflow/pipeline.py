@@ -12,6 +12,7 @@ from .config import (
     load_settings,
 )
 from .domain import DashboardState, SourceHealth
+from .emailer import processar_alertas_email
 from .indicators import (
     calcular_niveis_fixos,
     calcular_rsi,
@@ -22,7 +23,9 @@ from .indicators import (
     serialize_ohlc,
     ultimo_valor,
 )
+from .llm import gerar_explicacao_llm
 from .providers import baixar_fred_series, baixar_yahoo, data_mais_recente, timestamp_local
+from .quant import gerar_relatorios_quant, serialize_quant_indicator_frame
 from .settings_store import build_settings_payload
 from .storage import ArtifactStore
 from .strategy import (
@@ -107,6 +110,7 @@ def _build_market_asset_payload(
     intraday_4h: pd.DataFrame,
     daily_frame: pd.DataFrame,
     settings: AppSettings,
+    quant_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     label = ASSET_LABELS.get(asset, asset)
     intraday_indicator = _prepare_indicator_frame(intraday_4h, settings)
@@ -122,6 +126,13 @@ def _build_market_asset_payload(
         "ema_slow": float(latest_daily["EMA_SLOW"]) if latest_daily is not None else None,
         "rsi_daily": float(latest_daily["RSI"]) if latest_daily is not None else None,
         "default_timeframe": settings.market.chart_default_timeframe,
+        "quant_score": quant_report.get("score") if quant_report else None,
+        "quant_regime": quant_report.get("regime") if quant_report else None,
+        "quant_signal": quant_report.get("signal") if quant_report else None,
+        "vwap": quant_report.get("vwap") if quant_report else None,
+        "poc": quant_report.get("poc") if quant_report else None,
+        "adx": quant_report.get("adx") if quant_report else None,
+        "atr": quant_report.get("atr") if quant_report else None,
     }
 
     return {
@@ -135,20 +146,62 @@ def _build_market_asset_payload(
                 "label": "4 horas",
                 "candles": serialize_ohlc(intraday_4h),
                 "indicators": serialize_indicator_frame(intraday_indicator),
+                "quant_indicators": serialize_quant_indicator_frame(intraday_4h, settings),
             },
             "1D": {
                 "label": "Diário",
                 "candles": serialize_ohlc(daily_frame),
                 "indicators": serialize_indicator_frame(daily_frame),
+                "quant_indicators": serialize_quant_indicator_frame(daily_frame, settings),
             },
         },
+        "quant_report": quant_report or {},
         "indicator_notes": [
+            "VWAP, POC, ATR, ADX, Bollinger, OBV e volume spike compoem a camada quant deterministica.",
             "PMD resume a faixa média do candle e serve de base para a leitura estrutural.",
             f"MME{settings.market.strategy_ema_fast} acompanha momentum de curto prazo.",
             f"MME{settings.market.strategy_ema_slow} define a tendência principal e o trailing stop.",
             f"RSI({settings.market.rsi_period}) ajuda a perceber aceleração e perda de força.",
         ],
     }
+
+
+def _append_quant_to_snapshot(snapshot: dict[str, Any], reports: list[dict[str, Any]]) -> dict[str, Any]:
+    for report in reports:
+        prefix = str(report["ativo"]).lower()
+        snapshot.update(
+            {
+                f"{prefix}_quant_regime": report.get("regime"),
+                f"{prefix}_quant_score": report.get("score"),
+                f"{prefix}_quant_signal": report.get("signal"),
+                f"{prefix}_quant_status": report.get("status"),
+                f"{prefix}_quant_vwap": report.get("vwap"),
+                f"{prefix}_quant_poc": report.get("poc"),
+                f"{prefix}_quant_atr": report.get("atr"),
+                f"{prefix}_quant_adx": report.get("adx"),
+                f"{prefix}_quant_entry": report.get("entrada"),
+                f"{prefix}_quant_stop": report.get("stop"),
+                f"{prefix}_quant_target": report.get("alvo"),
+                f"{prefix}_quant_position_size": report.get("position_size"),
+            }
+        )
+    return snapshot
+
+
+def _format_quant_terminal(reports: list[dict[str, Any]], email_status: dict[str, Any]) -> str:
+    lines = ["QUANT + ALERTAS"]
+    for report in reports:
+        lines.append(
+            f"{report['label']} | regime {report['regime']} | score {report['score']} | "
+            f"sinal {report['signal']} | status {report['status']}"
+        )
+    if email_status.get("enabled"):
+        status = "enviado" if email_status.get("sent") else "nao enviado"
+        reasons = ", ".join(email_status.get("reasons") or []) or "sem gatilho"
+        lines.append(f"E-mail: {status} ({reasons})")
+    else:
+        lines.append("E-mail: desabilitado")
+    return "\n".join(lines)
 
 
 def _build_news_center() -> dict[str, Any]:
@@ -198,6 +251,7 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
 
     generated_at = timestamp_local()
     intraday_frames: dict[str, pd.DataFrame] = {}
+    quant_frames: dict[str, pd.DataFrame] = {}
     daily_frames: dict[str, pd.DataFrame] = {}
     source_health: list[SourceHealth] = []
 
@@ -232,6 +286,7 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         diario = baixar_yahoo(ticker, settings.market.yahoo_daily_period, settings.market.yahoo_daily_interval)
         intraday_4h = resample_para_4h(intraday)
         intraday_frames[nome] = intraday_4h
+        quant_frames[nome] = intraday if not intraday.empty else intraday_4h
         daily_frame = preparar_frame_diario(
             diario,
             ema_fast=settings.market.strategy_ema_fast,
@@ -302,9 +357,32 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
             )
         )
 
+    quant_reports = gerar_relatorios_quant(quant_frames, ATIVOS_YAHOO, macro_context, settings)
+    for report in quant_reports:
+        report["explanation"] = gerar_explicacao_llm(report, settings)
+        logger.info(
+            "Quant %s | regime=%s score=%s signal=%s status=%s",
+            report["ativo"],
+            report["regime"],
+            report["score"],
+            report["signal"],
+            report["status"],
+        )
+
+    email_status = processar_alertas_email(quant_reports, generated_at, settings)
+
     terminal_report = montar_relatorio_terminal(macro_context, decisions)
+    terminal_report = f"{terminal_report}\n\n{_format_quant_terminal(quant_reports, email_status)}"
+    quant_report_map = {report["ativo"]: report for report in quant_reports}
     market_assets = [
-        _build_market_asset_payload(asset, ticker, intraday_frames.get(asset, pd.DataFrame()), daily_frames.get(asset, pd.DataFrame()), settings)
+        _build_market_asset_payload(
+            asset,
+            ticker,
+            intraday_frames.get(asset, pd.DataFrame()),
+            daily_frames.get(asset, pd.DataFrame()),
+            settings,
+            quant_report=quant_report_map.get(asset),
+        )
         for asset, ticker in ATIVOS_YAHOO.items()
     ]
     dashboard_state = DashboardState(
@@ -322,14 +400,19 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
             "blocked": macro_context.nao_operar,
             "excel_path": str(settings.storage.excel_path),
             "default_chart_timeframe": settings.market.chart_default_timeframe,
+            "quant_reports_count": len(quant_reports),
+            "email_alerts": email_status,
         },
         market_overview=_build_market_overview(generated_at, source_health, settings, macro_context),
         market_assets=market_assets,
         news_center=_build_news_center(),
         settings_panel=build_settings_payload(settings),
+        quant_reports=quant_reports,
+        email_status=email_status,
     )
 
     snapshot = snapshot_from_state(macro_context, decisions, generated_at)
+    snapshot = _append_quant_to_snapshot(snapshot, quant_reports)
     store.save_excel_artifacts(snapshot, intraday_frames, daily_frames)
     store.append_snapshot_history(snapshot)
     store.save_dashboard_state(dashboard_state)

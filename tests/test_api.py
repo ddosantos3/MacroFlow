@@ -97,6 +97,32 @@ def test_settings_endpoint_persists_values(tmp_path: Path) -> None:
     assert score_field["value"] == "70"
 
 
+def test_settings_endpoint_normalizes_numeric_yahoo_period(tmp_path: Path) -> None:
+    settings = AppSettings(
+        storage=StorageConfig(
+            project_root=tmp_path,
+            runtime_dir=tmp_path,
+            excel_path=tmp_path / "MacroFlow_Dados.xlsx",
+            dashboard_state_path=tmp_path / "dashboard_state.json",
+            snapshot_history_path=tmp_path / "snapshots.jsonl",
+        ),
+        market=MarketConfig(),
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post("/api/settings", json={"values": {"MACROFLOW_YAHOO_INTRADAY_PERIOD": "30"}})
+    payload = response.json()
+
+    assert response.status_code == 200
+    period_field = next(
+        field
+        for group in payload["settings"]["groups"]
+        for field in group["fields"]
+        if field["env"] == "MACROFLOW_YAHOO_INTRADAY_PERIOD"
+    )
+    assert period_field["value"] == "30d"
+
+
 def test_health_endpoint_exposes_artifact_paths(tmp_path: Path) -> None:
     settings = AppSettings(
         storage=StorageConfig(

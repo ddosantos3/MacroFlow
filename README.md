@@ -1,5 +1,7 @@
 # MacroFlow
 
+Atualizacao atual: o MacroFlow agora inclui motor quant deterministico com `VWAP`, `POC`, `ATR`, `Bollinger`, `OBV`, `ADX`, score 0-100, classificacao de regime, risco por volatilidade, relatorio estruturado e alerta automatico por e-mail. A camada LLM, quando habilitada, apenas explica os dados e nao decide entrada.
+
 MacroFlow agora é uma plataforma local de inteligência macro + execução disciplinada para trading, com três pilares:
 
 - coleta e persistência de dados críticos (`DXY`, `US10Y`, `SPX`, `IBOV`, `USD/BRL` e proxies associados);
@@ -9,6 +11,8 @@ MacroFlow agora é uma plataforma local de inteligência macro + execução disc
 O projeto foi refatorado para separar ingestão, indicadores, estratégia, persistência e apresentação. O Excel continua existindo como artefato de compatibilidade, mas o contrato principal do sistema passa a ser o estado local em JSON consumido pelo dashboard.
 
 ## Dashboard modular
+
+A aba de indicadores agora tambem mostra leitura quant por ativo: score, regime, sinal deterministico, VWAP, POC, ADX, ATR, volume, volatilidade e explicacao operacional.
 
 O frontend local foi reorganizado em abas funcionais:
 
@@ -57,6 +61,13 @@ tests/
 
 Camadas:
 
+Novos modulos da camada quant e alertas:
+
+- `quant.py`: indicadores avancados, score, regime, regras de entrada/saida e risco por ATR;
+- `llm.py`: explicacao textual opcional com fallback local, sem decidir trade;
+- `emailer.py`: envio SMTP com gatilho por novo sinal ou relatorio diario;
+- `settings_store.py`: exposicao dos parametros editaveis no dashboard.
+
 - `providers.py`: integrações com `FRED` e `Yahoo Finance`
 - `indicators.py`: normalização, RSI, resample 4H, PMD, MME9/MME21 e níveis fixos
 - `strategy.py`: score macro, bloqueio institucional, leitura do setup e sizing
@@ -97,6 +108,20 @@ O sistema segue a lógica do documento de análise preditiva/prescritiva:
 - sizing:
   - risco máximo de `1%` do capital configurado
 
+## Camada quant e alertas
+
+A camada quant calcula `VWAP` intraday e rolling, `POC/VAH/VAL`, `ATR`, Bandas de Bollinger, squeeze, `OBV`, media de volume, detector de volume spike, `EMA 8/21/80/200` e `ADX`.
+
+O regime e classificado como `trend_clean`, `chaotic`, `range` ou `transition`. O score final vai de 0 a 100 e combina tendencia, volume, volatilidade, macro score, posicao contra VWAP e posicao contra POC.
+
+As entradas seguem regra deterministica: compra exige preco acima do VWAP e POC, `EMA21 > EMA80`, `ADX > 25` e volume spike; venda aplica a leitura inversa. Trades sao bloqueados em regime `chaotic`, quando o macro esta bloqueado ou quando a direcao macro conflita com o sinal operacional.
+
+Risco quant: `position_size = capital * risk_percent / ATR`, stop em `2 * ATR`, alvo em `3 * ATR` e teto efetivo de risco de 2% por operacao.
+
+O e-mail usa `smtplib` e fica desabilitado por padrao. Para ativar, configure `EMAIL_ENABLED=true`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_TO` e `EMAIL_SEND_MODE`. O estado anti-spam fica em `data/runtime/email_alert_state.json`.
+
+O LLM e opcional (`MACROFLOW_LLM_ENABLED=true`) e so gera explicacao textual. O sinal, entrada, stop, alvo e sizing continuam 100% deterministicos.
+
 ## Identidade visual
 
 O dashboard foi construído com um design system inspirado diretamente na imagem `referência_visual.png`:
@@ -132,6 +157,20 @@ Variáveis principais:
 - `MACROFLOW_EXCEL_PATH`
 - `MACROFLOW_CHART_DEFAULT_TIMEFRAME`
 - `MACROFLOW_PORT`
+- `MACROFLOW_VWAP_ROLLING_WINDOW`
+- `MACROFLOW_POC_BINS`
+- `MACROFLOW_ATR_PERIOD`
+- `MACROFLOW_VOLUME_SPIKE_FACTOR`
+- `MACROFLOW_ADX_PERIOD`
+- `MACROFLOW_QUANT_RISK_PERCENT`
+- `EMAIL_ENABLED`
+- `EMAIL_HOST`
+- `EMAIL_PORT`
+- `EMAIL_USER`
+- `EMAIL_PASSWORD`
+- `EMAIL_TO`
+- `MACROFLOW_LLM_ENABLED`
+- `OPENAI_API_KEY`
 
 ## Execução
 

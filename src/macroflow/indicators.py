@@ -84,6 +84,176 @@ def preparar_frame_diario(df_diario: pd.DataFrame, ema_fast: int, ema_slow: int,
     return frame
 
 
+def preco_tipico(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype=float)
+    return (frame["High"] + frame["Low"] + frame["Close"]) / 3
+
+
+def calcular_vwap_intraday(frame: pd.DataFrame) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty or "Volume" not in frame.columns:
+        return pd.Series(dtype=float, index=frame.index)
+    volume = frame["Volume"].astype(float).clip(lower=0)
+    price_volume = preco_tipico(frame) * volume
+    if isinstance(frame.index, pd.DatetimeIndex):
+        session = frame.index.normalize()
+        acumulado_volume = volume.groupby(session).cumsum().replace(0, np.nan)
+        acumulado_price_volume = price_volume.groupby(session).cumsum()
+        return acumulado_price_volume / acumulado_volume
+    acumulado_volume = volume.cumsum().replace(0, np.nan)
+    return price_volume.cumsum() / acumulado_volume
+
+
+def calcular_vwap_rolling(frame: pd.DataFrame, janela: int = 20) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty or "Volume" not in frame.columns:
+        return pd.Series(dtype=float, index=frame.index)
+    janela = max(int(janela), 1)
+    volume = frame["Volume"].astype(float).clip(lower=0)
+    volume_rolling = volume.rolling(janela, min_periods=1).sum().replace(0, np.nan)
+    pv_rolling = (preco_tipico(frame) * volume).rolling(janela, min_periods=1).sum()
+    return pv_rolling / volume_rolling
+
+
+def calcular_poc(frame: pd.DataFrame, bins: int = 24, value_area_pct: float = 0.70) -> dict[str, float]:
+    frame = normalizar_ohlc(frame)
+    if frame.empty or "Volume" not in frame.columns:
+        return {"poc": float("nan"), "vah": float("nan"), "val": float("nan")}
+
+    price = preco_tipico(frame).dropna()
+    volume = frame.loc[price.index, "Volume"].astype(float).clip(lower=0)
+    valid = price.notna() & volume.notna() & (volume > 0)
+    price = price[valid]
+    volume = volume[valid]
+    if price.empty or volume.sum() <= 0:
+        return {"poc": float("nan"), "vah": float("nan"), "val": float("nan")}
+
+    min_price = float(price.min())
+    max_price = float(price.max())
+    if min_price == max_price:
+        return {"poc": min_price, "vah": min_price, "val": min_price}
+
+    bins = max(int(bins), 1)
+    edges = np.linspace(min_price, max_price, bins + 1)
+    bucket = pd.cut(price, bins=edges, include_lowest=True)
+    volume_profile = volume.groupby(bucket, observed=True).sum()
+    if volume_profile.empty:
+        return {"poc": float("nan"), "vah": float("nan"), "val": float("nan")}
+
+    poc_interval = volume_profile.idxmax()
+    poc = float((poc_interval.left + poc_interval.right) / 2)
+    target_volume = float(volume_profile.sum()) * min(max(float(value_area_pct), 0.0), 1.0)
+    selected = volume_profile.sort_values(ascending=False)
+    accumulated = 0.0
+    intervals = []
+    for interval, vol in selected.items():
+        intervals.append(interval)
+        accumulated += float(vol)
+        if accumulated >= target_volume:
+            break
+    vah = float(max(interval.right for interval in intervals)) if intervals else float("nan")
+    val = float(min(interval.left for interval in intervals)) if intervals else float("nan")
+    return {"poc": poc, "vah": vah, "val": val}
+
+
+def calcular_atr(frame: pd.DataFrame, periodo: int = 14) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty:
+        return pd.Series(dtype=float, index=frame.index)
+    periodo = max(int(periodo), 1)
+    previous_close = frame["Close"].shift(1)
+    true_range = pd.concat(
+        [
+            frame["High"] - frame["Low"],
+            (frame["High"] - previous_close).abs(),
+            (frame["Low"] - previous_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return true_range.ewm(alpha=1 / periodo, adjust=False, min_periods=periodo).mean()
+
+
+def calcular_bollinger_bands(
+    series: pd.Series,
+    periodo: int = 20,
+    desvio_padrao: float = 2.0,
+) -> pd.DataFrame:
+    if series.empty:
+        return pd.DataFrame(index=series.index, columns=["BB_MIDDLE", "BB_UPPER", "BB_LOWER", "BB_BANDWIDTH"])
+    periodo = max(int(periodo), 1)
+    middle = series.rolling(periodo, min_periods=periodo).mean()
+    rolling_std = series.rolling(periodo, min_periods=periodo).std(ddof=0)
+    upper = middle + (rolling_std * desvio_padrao)
+    lower = middle - (rolling_std * desvio_padrao)
+    bandwidth = (upper - lower) / middle.replace(0, np.nan)
+    return pd.DataFrame(
+        {
+            "BB_MIDDLE": middle,
+            "BB_UPPER": upper,
+            "BB_LOWER": lower,
+            "BB_BANDWIDTH": bandwidth,
+        },
+        index=series.index,
+    )
+
+
+def detectar_squeeze(bandwidth: pd.Series, janela: int = 20) -> pd.Series:
+    if bandwidth.empty:
+        return pd.Series(dtype=bool, index=bandwidth.index)
+    janela = max(int(janela), 1)
+    threshold = bandwidth.rolling(janela, min_periods=janela).quantile(0.20)
+    return (bandwidth <= threshold).fillna(False)
+
+
+def calcular_obv(frame: pd.DataFrame) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty or "Volume" not in frame.columns:
+        return pd.Series(dtype=float, index=frame.index)
+    direction = np.sign(frame["Close"].diff()).fillna(0)
+    return (direction * frame["Volume"].astype(float).fillna(0)).cumsum()
+
+
+def calcular_volume_media(frame: pd.DataFrame, janela: int = 20) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty or "Volume" not in frame.columns:
+        return pd.Series(dtype=float, index=frame.index)
+    janela = max(int(janela), 1)
+    return frame["Volume"].astype(float).rolling(janela, min_periods=1).mean()
+
+
+def detectar_volume_spike(volume: pd.Series, media_volume: pd.Series, fator: float = 1.5) -> pd.Series:
+    if volume.empty or media_volume.empty:
+        return pd.Series(dtype=bool, index=volume.index)
+    fator = max(float(fator), 0.0)
+    return (volume.astype(float) > (media_volume.astype(float) * fator)).fillna(False)
+
+
+def calcular_adx(frame: pd.DataFrame, periodo: int = 14) -> pd.Series:
+    frame = normalizar_ohlc(frame)
+    if frame.empty:
+        return pd.Series(dtype=float, index=frame.index)
+    periodo = max(int(periodo), 1)
+    high = frame["High"].astype(float)
+    low = frame["Low"].astype(float)
+
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = pd.Series(
+        np.where((up_move > down_move) & (up_move > 0), up_move, 0.0),
+        index=frame.index,
+    )
+    minus_dm = pd.Series(
+        np.where((down_move > up_move) & (down_move > 0), down_move, 0.0),
+        index=frame.index,
+    )
+    atr = calcular_atr(frame, periodo=periodo).replace(0, np.nan)
+    plus_di = 100 * plus_dm.ewm(alpha=1 / periodo, adjust=False, min_periods=periodo).mean() / atr
+    minus_di = 100 * minus_dm.ewm(alpha=1 / periodo, adjust=False, min_periods=periodo).mean() / atr
+    dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)).clip(0, 100)
+    return dx.ewm(alpha=1 / periodo, adjust=False, min_periods=periodo).mean()
+
+
 def calcular_variacao(df_4h: pd.DataFrame) -> tuple[float, float, float, float]:
     if df_4h.empty:
         return (float("nan"), float("nan"), float("nan"), float("nan"))

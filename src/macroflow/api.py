@@ -24,6 +24,8 @@ def _empty_state(settings: AppSettings) -> dict[str, object]:
             "has_actionable_trade": False,
             "excel_path": str(settings.storage.excel_path),
             "default_chart_timeframe": settings.market.chart_default_timeframe,
+            "quant_reports_count": 0,
+            "email_alerts": {"enabled": settings.email.enabled, "sent": False, "reasons": []},
         },
         "macro_context": {
             "regime": "NEUTRO",
@@ -69,6 +71,8 @@ def _empty_state(settings: AppSettings) -> dict[str, object]:
             "implementation_tasks": [],
         },
         "settings_panel": settings_panel,
+        "quant_reports": [],
+        "email_status": {"enabled": settings.email.enabled, "sent": False, "reasons": []},
     }
 
 
