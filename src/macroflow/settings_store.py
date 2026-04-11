@@ -3,7 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import PROJECT_ROOT, AppSettings, MarketConfig, StorageConfig, load_settings
+from .config import (
+    CalendarConfig,
+    EmailConfig,
+    JarvisConfig,
+    LLMConfig,
+    PROJECT_ROOT,
+    AppSettings,
+    MarketConfig,
+    QuantConfig,
+    StorageConfig,
+    load_settings,
+)
 
 
 FIELD_GROUPS: list[dict[str, Any]] = [
@@ -141,6 +152,69 @@ FIELD_GROUPS: list[dict[str, Any]] = [
             },
         ],
     },
+    {
+        "id": "quant",
+        "title": "Motor Quantitativo",
+        "description": "Parametros de VWAP, POC, volatilidade, volume, tendencia, score e risco por ATR.",
+        "fields": [
+            {"env": "MACROFLOW_VWAP_ROLLING_WINDOW", "label": "Janela VWAP rolling", "type": "number", "step": "1", "help": "Janela usada no VWAP rolling."},
+            {"env": "MACROFLOW_POC_BINS", "label": "Faixas do POC", "type": "number", "step": "1", "help": "Quantidade de buckets da distribuicao de volume por preco."},
+            {"env": "MACROFLOW_VALUE_AREA_PCT", "label": "Value area (%)", "type": "number", "step": "0.01", "help": "Percentual de volume usado para VAH/VAL. Ex: 0.70."},
+            {"env": "MACROFLOW_ATR_PERIOD", "label": "Periodo ATR", "type": "number", "step": "1", "help": "Janela do ATR usado na gestao de risco."},
+            {"env": "MACROFLOW_BB_PERIOD", "label": "Periodo Bollinger", "type": "number", "step": "1", "help": "Janela das Bandas de Bollinger."},
+            {"env": "MACROFLOW_BB_STD", "label": "Desvio Bollinger", "type": "number", "step": "0.1", "help": "Multiplicador de desvio padrao das bandas."},
+            {"env": "MACROFLOW_VOLUME_AVERAGE_WINDOW", "label": "Media de volume", "type": "number", "step": "1", "help": "Janela de media de volume para detectar spike."},
+            {"env": "MACROFLOW_VOLUME_SPIKE_FACTOR", "label": "Fator volume spike", "type": "number", "step": "0.1", "help": "Volume atual precisa superar media x fator."},
+            {"env": "MACROFLOW_ADX_PERIOD", "label": "Periodo ADX", "type": "number", "step": "1", "help": "Janela do ADX para classificar tendencia."},
+            {"env": "MACROFLOW_SQUEEZE_WINDOW", "label": "Janela squeeze", "type": "number", "step": "1", "help": "Janela para detectar compressao de volatilidade."},
+            {"env": "MACROFLOW_QUANT_EMA_FAST", "label": "EMA quant curta", "type": "number", "step": "1", "help": "Media curta da camada quant. Padrao: 8."},
+            {"env": "MACROFLOW_QUANT_EMA_MID", "label": "EMA quant media", "type": "number", "step": "1", "help": "Media de referencia para tendencia. Padrao: 21."},
+            {"env": "MACROFLOW_QUANT_EMA_SLOW", "label": "EMA quant lenta", "type": "number", "step": "1", "help": "Media estrutural para regime. Padrao: 80."},
+            {"env": "MACROFLOW_QUANT_EMA_LONG", "label": "EMA quant longa", "type": "number", "step": "1", "help": "Media longa de contexto. Padrao: 200."},
+            {"env": "MACROFLOW_QUANT_RISK_PERCENT", "label": "Risco quant por operacao", "type": "number", "step": "0.001", "help": "Risco por trade no motor quant. Maximo efetivo: 0.02."},
+            {"env": "MACROFLOW_QUANT_MAX_RISK_PERCENT", "label": "Teto de risco quant", "type": "number", "step": "0.001", "help": "Teto configuravel. O codigo ainda limita a 0.02 por seguranca."},
+            {"env": "MACROFLOW_STOP_ATR_MULTIPLE", "label": "Stop em ATR", "type": "number", "step": "0.1", "help": "Multiplicador de ATR para o stop."},
+            {"env": "MACROFLOW_TARGET_ATR_MULTIPLE", "label": "Alvo em ATR", "type": "number", "step": "0.1", "help": "Multiplicador de ATR para o alvo."},
+        ],
+    },
+    {
+        "id": "alertas",
+        "title": "Alertas e LLM",
+        "description": "Envio automatico de e-mail e camada explicativa do LLM, sem alterar a decisao deterministica.",
+        "fields": [
+            {"env": "EMAIL_ENABLED", "label": "Habilitar e-mail", "type": "select", "options": ["false", "true"], "help": "Ativa envio quando houver sinal novo ou relatorio diario."},
+            {"env": "EMAIL_HOST", "label": "SMTP host", "type": "text", "placeholder": "smtp.gmail.com", "help": "Servidor SMTP usado para envio."},
+            {"env": "EMAIL_PORT", "label": "SMTP porta", "type": "number", "step": "1", "help": "Porta SMTP. Gmail normalmente usa 587."},
+            {"env": "EMAIL_USER", "label": "E-mail usuario", "type": "text", "help": "Conta usada como remetente."},
+            {"env": "EMAIL_PASSWORD", "label": "Senha/token SMTP", "type": "password", "help": "Senha de app ou token SMTP.", "secret": True},
+            {"env": "EMAIL_TO", "label": "Destinatario", "type": "text", "help": "E-mail que recebera os relatorios."},
+            {"env": "EMAIL_SEND_MODE", "label": "Modo de envio", "type": "select", "options": ["signal_or_daily", "signal", "daily"], "help": "Define o gatilho de envio automatico."},
+            {"env": "EMAIL_USE_TLS", "label": "Usar TLS", "type": "select", "options": ["true", "false"], "help": "Mantem STARTTLS ativo por padrao."},
+            {"env": "MACROFLOW_LLM_ENABLED", "label": "Habilitar LLM", "type": "select", "options": ["false", "true"], "help": "Quando falso, usa explicacao local deterministica."},
+            {"env": "MACROFLOW_LLM_PROVIDER", "label": "Provider LLM", "type": "text", "placeholder": "openai", "help": "Provider da camada explicativa. Hoje: openai."},
+            {"env": "OPENAI_API_KEY", "label": "OpenAI API Key", "type": "password", "help": "Usada apenas para explicacao textual, nunca para decidir trade.", "secret": True},
+            {"env": "OPENAI_MODEL", "label": "Modelo OpenAI", "type": "text", "placeholder": "gpt-4.1-mini", "help": "Modelo usado na camada explicativa."},
+            {"env": "MACROFLOW_LLM_TIMEOUT_SECONDS", "label": "Timeout LLM", "type": "number", "step": "1", "help": "Timeout da chamada HTTP ao LLM."},
+        ],
+    },
+    {
+        "id": "calendario_jarvis",
+        "title": "Calendario Economico e Jarvis",
+        "description": "Fonte de eventos macro e contexto conversacional do Jarvis - Trader Quantitativo.",
+        "fields": [
+            {"env": "MACROFLOW_CALENDAR_ENABLED", "label": "Habilitar calendario", "type": "select", "options": ["true", "false"], "help": "Ativa a coleta do calendario economico no refresh."},
+            {"env": "MACROFLOW_CALENDAR_PROVIDER", "label": "Provider calendario", "type": "select", "options": ["forexfactory", "tradingeconomics"], "help": "forexfactory funciona sem chave; tradingeconomics exige permissao na API."},
+            {"env": "MACROFLOW_CALENDAR_COUNTRIES", "label": "Paises do calendario", "type": "text", "placeholder": "United States,Brazil,Euro Area,China", "help": "Lista separada por virgula. Ex: United States,Brazil."},
+            {"env": "MACROFLOW_CALENDAR_IMPORTANCE_MIN", "label": "Criticidade minima", "type": "select", "options": ["1", "2", "3"], "help": "1, 2 ou 3 touros. O filtro visual continua disponivel na aba Noticias."},
+            {"env": "MACROFLOW_CALENDAR_DAYS_BACK", "label": "Dias para tras", "type": "number", "step": "1", "help": "Janela retroativa do calendario."},
+            {"env": "MACROFLOW_CALENDAR_DAYS_AHEAD", "label": "Dias para frente", "type": "number", "step": "1", "help": "Janela futura do calendario."},
+            {"env": "MACROFLOW_CALENDAR_MAX_EVENTS", "label": "Maximo de eventos", "type": "number", "step": "1", "help": "Limite de eventos salvos no dashboard."},
+            {"env": "TRADING_ECONOMICS_API_KEY", "label": "Trading Economics key", "type": "password", "help": "Opcional. Padrao guest:guest; use sua credencial se tiver.", "secret": True},
+            {"env": "MACROFLOW_JARVIS_PROMPT_PATH", "label": "Prompt do Jarvis", "type": "text", "placeholder": "prompt.txt", "help": "Caminho do prompt usado pelo chat Jarvis."},
+            {"env": "MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS", "label": "Eventos no contexto", "type": "number", "step": "1", "help": "Quantidade maxima de eventos enviados ao Jarvis."},
+            {"env": "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES", "label": "Historico do chat", "type": "number", "step": "1", "help": "Quantidade maxima de mensagens recentes enviadas ao Jarvis."},
+        ],
+    },
 ]
 
 
@@ -162,6 +236,48 @@ def _current_value(settings: AppSettings, env_name: str) -> str:
         "MACROFLOW_CHART_DEFAULT_TIMEFRAME": settings.market.chart_default_timeframe,
         "MACROFLOW_MACRO_DELTA_BARS": settings.market.macro_delta_bars,
         "MACROFLOW_VOLUME_LOOKBACK": settings.market.volume_lookback,
+        "MACROFLOW_VWAP_ROLLING_WINDOW": settings.quant.vwap_rolling_window,
+        "MACROFLOW_POC_BINS": settings.quant.poc_bins,
+        "MACROFLOW_VALUE_AREA_PCT": settings.quant.value_area_pct,
+        "MACROFLOW_ATR_PERIOD": settings.quant.atr_period,
+        "MACROFLOW_BB_PERIOD": settings.quant.bb_period,
+        "MACROFLOW_BB_STD": settings.quant.bb_std,
+        "MACROFLOW_VOLUME_AVERAGE_WINDOW": settings.quant.volume_average_window,
+        "MACROFLOW_VOLUME_SPIKE_FACTOR": settings.quant.volume_spike_factor,
+        "MACROFLOW_ADX_PERIOD": settings.quant.adx_period,
+        "MACROFLOW_SQUEEZE_WINDOW": settings.quant.squeeze_window,
+        "MACROFLOW_QUANT_EMA_FAST": settings.quant.ema_fast,
+        "MACROFLOW_QUANT_EMA_MID": settings.quant.ema_mid,
+        "MACROFLOW_QUANT_EMA_SLOW": settings.quant.ema_slow,
+        "MACROFLOW_QUANT_EMA_LONG": settings.quant.ema_long,
+        "MACROFLOW_QUANT_RISK_PERCENT": settings.quant.risk_percent,
+        "MACROFLOW_QUANT_MAX_RISK_PERCENT": settings.quant.max_risk_percent,
+        "MACROFLOW_STOP_ATR_MULTIPLE": settings.quant.stop_atr_multiple,
+        "MACROFLOW_TARGET_ATR_MULTIPLE": settings.quant.target_atr_multiple,
+        "EMAIL_ENABLED": str(settings.email.enabled).lower(),
+        "EMAIL_HOST": settings.email.host,
+        "EMAIL_PORT": settings.email.port,
+        "EMAIL_USER": settings.email.user,
+        "EMAIL_PASSWORD": settings.email.password,
+        "EMAIL_TO": settings.email.to,
+        "EMAIL_SEND_MODE": settings.email.send_mode,
+        "EMAIL_USE_TLS": str(settings.email.use_tls).lower(),
+        "MACROFLOW_LLM_ENABLED": str(settings.llm.enabled).lower(),
+        "MACROFLOW_LLM_PROVIDER": settings.llm.provider,
+        "OPENAI_API_KEY": settings.llm.api_key,
+        "OPENAI_MODEL": settings.llm.model,
+        "MACROFLOW_LLM_TIMEOUT_SECONDS": settings.llm.timeout_seconds,
+        "MACROFLOW_CALENDAR_ENABLED": str(settings.calendar.enabled).lower(),
+        "MACROFLOW_CALENDAR_PROVIDER": settings.calendar.provider,
+        "MACROFLOW_CALENDAR_COUNTRIES": settings.calendar.countries,
+        "MACROFLOW_CALENDAR_IMPORTANCE_MIN": settings.calendar.importance_min,
+        "MACROFLOW_CALENDAR_DAYS_BACK": settings.calendar.days_back,
+        "MACROFLOW_CALENDAR_DAYS_AHEAD": settings.calendar.days_ahead,
+        "MACROFLOW_CALENDAR_MAX_EVENTS": settings.calendar.max_events,
+        "TRADING_ECONOMICS_API_KEY": settings.calendar.api_key,
+        "MACROFLOW_JARVIS_PROMPT_PATH": settings.jarvis.prompt_path,
+        "MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS": settings.jarvis.max_context_events,
+        "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES": settings.jarvis.max_history_messages,
     }
     value = mapping.get(env_name, "")
     return "" if value is None else str(value)
@@ -218,13 +334,14 @@ def update_env_file(values: dict[str, Any], project_root: Path | None = None) ->
     env_path = _env_path(project_root)
     existing_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
     indexed_keys: dict[str, int] = {}
+    secret_keys = {"FRED_API_KEY", "EMAIL_PASSWORD", "OPENAI_API_KEY", "TRADING_ECONOMICS_API_KEY"}
     for idx, line in enumerate(existing_lines):
         if "=" in line and not line.strip().startswith("#"):
             indexed_keys[line.split("=", 1)[0].strip()] = idx
 
     for key, raw_value in values.items():
         value = "" if raw_value is None else str(raw_value).strip()
-        if key == "FRED_API_KEY" and value == "":
+        if key in secret_keys and value == "":
             continue
         new_line = f"{key}={value}"
         if key in indexed_keys:
@@ -252,7 +369,22 @@ def reload_settings(target: AppSettings) -> AppSettings:
             value = env_map.get(name, "")
             return float(value.replace(",", ".")) if value else fallback
 
+        def env_bool(name: str, fallback: bool) -> bool:
+            value = env_map.get(name, "").strip().lower()
+            if not value:
+                return fallback
+            return value in {"1", "true", "yes", "sim", "on"}
+
+        def env_yahoo_period(name: str, fallback: str) -> str:
+            value = env_str(name, fallback).lower()
+            if value.isdigit():
+                return f"{value}d"
+            return value
+
         runtime_dir = Path(env_str("MACROFLOW_RUNTIME_DIR", str(target.storage.runtime_dir)))
+        jarvis_prompt_path = Path(env_str("MACROFLOW_JARVIS_PROMPT_PATH", str(target.jarvis.prompt_path)))
+        if not jarvis_prompt_path.is_absolute():
+            jarvis_prompt_path = target.storage.project_root / jarvis_prompt_path
         fresh = AppSettings(
             storage=StorageConfig(
                 project_root=target.storage.project_root,
@@ -266,9 +398,9 @@ def reload_settings(target: AppSettings) -> AppSettings:
                 ),
             ),
             market=MarketConfig(
-                yahoo_intraday_period=env_str("MACROFLOW_YAHOO_INTRADAY_PERIOD", target.market.yahoo_intraday_period),
+                yahoo_intraday_period=env_yahoo_period("MACROFLOW_YAHOO_INTRADAY_PERIOD", target.market.yahoo_intraday_period),
                 yahoo_intraday_interval=env_str("MACROFLOW_YAHOO_INTRADAY_INTERVAL", target.market.yahoo_intraday_interval),
-                yahoo_daily_period=env_str("MACROFLOW_YAHOO_DAILY_PERIOD", target.market.yahoo_daily_period),
+                yahoo_daily_period=env_yahoo_period("MACROFLOW_YAHOO_DAILY_PERIOD", target.market.yahoo_daily_period),
                 yahoo_daily_interval=env_str("MACROFLOW_YAHOO_DAILY_INTERVAL", target.market.yahoo_daily_interval),
                 chart_default_timeframe=env_str(
                     "MACROFLOW_CHART_DEFAULT_TIMEFRAME", target.market.chart_default_timeframe
@@ -291,11 +423,79 @@ def reload_settings(target: AppSettings) -> AppSettings:
                 fred_serie_us10y=env_str("MACROFLOW_FRED_US10Y", target.market.fred_serie_us10y),
                 fred_api_key=env_str("FRED_API_KEY", target.market.fred_api_key),
             ),
+            quant=QuantConfig(
+                vwap_rolling_window=env_int("MACROFLOW_VWAP_ROLLING_WINDOW", target.quant.vwap_rolling_window),
+                poc_bins=env_int("MACROFLOW_POC_BINS", target.quant.poc_bins),
+                value_area_pct=env_float("MACROFLOW_VALUE_AREA_PCT", target.quant.value_area_pct) or target.quant.value_area_pct,
+                atr_period=env_int("MACROFLOW_ATR_PERIOD", target.quant.atr_period),
+                bb_period=env_int("MACROFLOW_BB_PERIOD", target.quant.bb_period),
+                bb_std=env_float("MACROFLOW_BB_STD", target.quant.bb_std) or target.quant.bb_std,
+                volume_average_window=env_int(
+                    "MACROFLOW_VOLUME_AVERAGE_WINDOW", target.quant.volume_average_window
+                ),
+                volume_spike_factor=env_float(
+                    "MACROFLOW_VOLUME_SPIKE_FACTOR", target.quant.volume_spike_factor
+                )
+                or target.quant.volume_spike_factor,
+                adx_period=env_int("MACROFLOW_ADX_PERIOD", target.quant.adx_period),
+                squeeze_window=env_int("MACROFLOW_SQUEEZE_WINDOW", target.quant.squeeze_window),
+                ema_fast=env_int("MACROFLOW_QUANT_EMA_FAST", target.quant.ema_fast),
+                ema_mid=env_int("MACROFLOW_QUANT_EMA_MID", target.quant.ema_mid),
+                ema_slow=env_int("MACROFLOW_QUANT_EMA_SLOW", target.quant.ema_slow),
+                ema_long=env_int("MACROFLOW_QUANT_EMA_LONG", target.quant.ema_long),
+                risk_percent=env_float("MACROFLOW_QUANT_RISK_PERCENT", target.quant.risk_percent)
+                or target.quant.risk_percent,
+                max_risk_percent=env_float("MACROFLOW_QUANT_MAX_RISK_PERCENT", target.quant.max_risk_percent)
+                or target.quant.max_risk_percent,
+                stop_atr_multiple=env_float("MACROFLOW_STOP_ATR_MULTIPLE", target.quant.stop_atr_multiple)
+                or target.quant.stop_atr_multiple,
+                target_atr_multiple=env_float("MACROFLOW_TARGET_ATR_MULTIPLE", target.quant.target_atr_multiple)
+                or target.quant.target_atr_multiple,
+            ),
+            email=EmailConfig(
+                enabled=env_bool("EMAIL_ENABLED", target.email.enabled),
+                host=env_str("EMAIL_HOST", target.email.host),
+                port=env_int("EMAIL_PORT", target.email.port),
+                user=env_str("EMAIL_USER", target.email.user),
+                password=env_str("EMAIL_PASSWORD", target.email.password),
+                to=env_str("EMAIL_TO", target.email.to),
+                send_mode=env_str("EMAIL_SEND_MODE", target.email.send_mode),
+                use_tls=env_bool("EMAIL_USE_TLS", target.email.use_tls),
+            ),
+            llm=LLMConfig(
+                enabled=env_bool("MACROFLOW_LLM_ENABLED", target.llm.enabled),
+                provider=env_str("MACROFLOW_LLM_PROVIDER", target.llm.provider),
+                api_key=env_str("OPENAI_API_KEY", target.llm.api_key),
+                model=env_str("OPENAI_MODEL", target.llm.model),
+                timeout_seconds=env_int("MACROFLOW_LLM_TIMEOUT_SECONDS", target.llm.timeout_seconds),
+            ),
+            calendar=CalendarConfig(
+                enabled=env_bool("MACROFLOW_CALENDAR_ENABLED", target.calendar.enabled),
+                provider=env_str("MACROFLOW_CALENDAR_PROVIDER", target.calendar.provider),
+                api_key=env_str("TRADING_ECONOMICS_API_KEY", target.calendar.api_key),
+                countries=env_str("MACROFLOW_CALENDAR_COUNTRIES", target.calendar.countries),
+                importance_min=env_int("MACROFLOW_CALENDAR_IMPORTANCE_MIN", target.calendar.importance_min),
+                days_back=env_int("MACROFLOW_CALENDAR_DAYS_BACK", target.calendar.days_back),
+                days_ahead=env_int("MACROFLOW_CALENDAR_DAYS_AHEAD", target.calendar.days_ahead),
+                max_events=env_int("MACROFLOW_CALENDAR_MAX_EVENTS", target.calendar.max_events),
+            ),
+            jarvis=JarvisConfig(
+                prompt_path=jarvis_prompt_path,
+                max_context_events=env_int("MACROFLOW_JARVIS_MAX_CONTEXT_EVENTS", target.jarvis.max_context_events),
+                max_history_messages=env_int(
+                    "MACROFLOW_JARVIS_MAX_HISTORY_MESSAGES", target.jarvis.max_history_messages
+                ),
+            ),
             host=env_str("MACROFLOW_HOST", target.host),
             port=env_int("MACROFLOW_PORT", target.port),
         )
     target.storage = fresh.storage
     target.market = fresh.market
+    target.quant = fresh.quant
+    target.email = fresh.email
+    target.llm = fresh.llm
+    target.calendar = fresh.calendar
+    target.jarvis = fresh.jarvis
     target.host = fresh.host
     target.port = fresh.port
     return target
