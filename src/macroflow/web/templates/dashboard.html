@@ -1,84 +1,119 @@
 {% extends "base.html" %}
 {% block body %}
+<div class="app-noise"></div>
 <div class="ambient ambient-left"></div>
+<div class="ambient ambient-center"></div>
 <div class="ambient ambient-right"></div>
 
 <div class="app-shell">
   <aside class="sidebar panel">
-    <div class="brand">
-      <div class="brand-mark">MF</div>
-      <div>
-        <p class="eyebrow">Trading Intelligence</p>
-        <h1>{{ app_name }}</h1>
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-mark"><span>MF</span></div>
+        <div>
+          <p class="eyebrow">Quant command desk</p>
+          <h1>{{ app_name }}</h1>
+          <p class="brand-copy">Macro, fluxo, calendario e execucao em uma leitura premium para trader.</p>
+        </div>
       </div>
-    </div>
 
-    <div class="sidebar-status">
-      <p class="section-label">Estado atual</p>
-      <strong id="sidebar-headline">Aguardando coleta inicial</strong>
-      <p id="sidebar-time" class="muted">Sem atualização recente</p>
     </div>
 
     <nav class="sidebar-nav" aria-label="Menu principal do dashboard">
-      <button class="nav-pill active" data-tab="menu-principal">Menu Principal</button>
-      <button class="nav-pill" data-tab="analise-grafica">Análise Gráfica</button>
-      <button class="nav-pill" data-tab="indicadores-tecnicos">Indicadores Técnicos</button>
-      <button class="nav-pill" data-tab="noticias-mercado">Notícias do Mercado Financeiro</button>
-      <button class="nav-pill" data-tab="configuracoes">Configurações</button>
-      <button id="refresh-button" class="primary-button">Iniciar Macroflow</button>
+      <button class="nav-pill active" data-tab="menu-principal" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">🛰️</span></span>
+        <span class="nav-copy">
+          <strong>Menu Principal</strong>
+          <small>Resumo executivo</small>
+        </span>
+      </button>
+      <button class="nav-pill" data-tab="analise-grafica" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">📈</span></span>
+        <span class="nav-copy">
+          <strong>Análise Gráfica</strong>
+          <small>Candles e contexto</small>
+        </span>
+      </button>
+      <button class="nav-pill" data-tab="indicadores-tecnicos" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">🧠</span></span>
+        <span class="nav-copy">
+          <strong>Indicadores Técnicos</strong>
+          <small>Motor quant detalhado</small>
+        </span>
+      </button>
+      <button class="nav-pill" data-tab="noticias-mercado" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">🌍</span></span>
+        <span class="nav-copy">
+          <strong>Notícias do Mercado</strong>
+          <small>Calendario e impacto</small>
+        </span>
+      </button>
+      <button class="nav-pill" data-tab="integridade-dados" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">🩺</span></span>
+        <span class="nav-copy">
+          <strong>Integridade dos Dados</strong>
+          <small>Saude dos feeds</small>
+        </span>
+      </button>
+      <button class="nav-pill" data-tab="configuracoes" type="button">
+        <span class="nav-icon"><span class="nav-icon-glyph">⚙️</span></span>
+        <span class="nav-copy">
+          <strong>Configurações</strong>
+          <small>Nucleo parametrizavel</small>
+        </span>
+      </button>
+      <button id="refresh-button" class="primary-button" type="button">🚀 Iniciar MacroFlow</button>
     </nav>
+
   </aside>
 
   <main class="content">
-    <header class="topbar panel">
-      <div>
-        <p class="eyebrow">MacroFlow modular</p>
-        <h2>{{ headline }}</h2>
-      </div>
-      <div class="topbar-meta">
-        <div class="badge-card">
-          <span class="badge-label">Status</span>
-          <strong id="headline-status">N/A</strong>
-        </div>
-        <div class="badge-card">
-          <span class="badge-label">Última coleta</span>
-          <strong id="headline-time">-</strong>
-        </div>
-      </div>
-    </header>
-
-    <section class="tab-panel active" data-panel="menu-principal">
-      <article class="panel principal-hero">
-        <div class="principal-hero-content">
-          <p class="eyebrow">Menu Principal</p>
-          <h3 id="overview-title">Panorama geral do mercado</h3>
-          <p id="overview-subtitle" class="hero-copy">O MacroFlow organiza o contexto macro e explica como o motor operacional reage ao cenário vigente.</p>
+<section class="tab-panel active" data-panel="menu-principal">
+      <article class="panel command-hero">
+        <div class="hero-copy-column">
+          <div class="principal-hero-content">
+            <h3 id="overview-title">Panorama geral do mercado</h3>
+            <p id="overview-subtitle" class="hero-copy">O MacroFlow organiza macro, calendário e motor quant em uma leitura fluida para a tomada de decisão.</p>
+          </div>
+          <div id="hero-highlights" class="hero-highlights"></div>
         </div>
       </article>
 
-      <section id="overview-cards" class="metrics-grid"></section>
+      <article class="panel hero-ops hero-ops-standalone">
+        <p class="section-label">🌐 MacroFlow pulse</p>
+        <h4 id="hero-operation-headline">Sem dados carregados</h4>
+        <p id="hero-operation-reason" class="muted">Aguardando a primeira sincronizacao do dashboard.</p>
 
-      <section class="split-grid">
-        <article class="panel info-card">
+        <div class="hero-stat-grid">
+          <div class="hero-stat">
+            <span>Regime</span>
+            <strong id="hero-regime-value">-</strong>
+          </div>
+          <div class="hero-stat">
+            <span>Score</span>
+            <strong id="hero-score-value">-</strong>
+          </div>
+          <div class="hero-stat">
+            <span>Viés</span>
+            <strong id="hero-bias-value">-</strong>
+          </div>
+          <div class="hero-stat">
+            <span>Setups</span>
+            <strong id="hero-setup-value">-</strong>
+          </div>
+        </div>
+      </article>
+
+      <section class="principal-brief-grid">
+        <article class="panel info-card luminous-card principal-brief-card">
           <div class="card-header">
             <div>
-              <p class="eyebrow">Sobre o MacroFlow</p>
-              <h3>O que ele faz</h3>
+              <p class="eyebrow">🧬 Sobre o MacroFlow</p>
+              <h3>Como ele atua</h3>
             </div>
-            <span class="tag">produto</span>
+            <span class="tag">essencial</span>
           </div>
-          <ul id="macroflow-does" class="list-clean"></ul>
-        </article>
-
-        <article class="panel info-card">
-          <div class="card-header">
-            <div>
-              <p class="eyebrow">Leitura de mercado</p>
-              <h3>Notas gerais</h3>
-            </div>
-            <span class="tag subtle">visão macro</span>
-          </div>
-          <ul id="market-notes" class="list-clean"></ul>
+          <div id="macroflow-brief" class="principal-brief-body"></div>
         </article>
       </section>
     </section>
@@ -87,9 +122,9 @@
       <article class="panel section-shell">
         <div class="section-topline">
           <div>
-            <p class="eyebrow">Análise Gráfica</p>
-            <h3>Candlesticks de todos os ativos monitorados</h3>
-            <p class="muted">A leitura gráfica foi separada em módulo próprio para dar liberdade visual e comparação clara entre os ativos.</p>
+            <p class="eyebrow">📈 Análise Gráfica</p>
+            <h3>Candlesticks com acabamento premium para todos os ativos monitorados</h3>
+            <p class="muted">Visual trader-first com leitura rapida de estrutura, contexto e status operacional em cada card.</p>
           </div>
           <div class="timeframe-switch" data-timeframe-group="charts"></div>
         </div>
@@ -101,23 +136,23 @@
       <article class="panel section-shell">
         <div class="section-topline">
           <div>
-            <p class="eyebrow">Indicadores Técnicos</p>
-            <h3>PMD, medias, RSI, VWAP, POC, ADX, ATR e volume</h3>
-            <p class="muted">Cada ativo recebe um bloco com serie tecnica, score quant, explicacao e sinais deterministicos que o MacroFlow usa para decidir.</p>
+            <p class="eyebrow">🧠 Indicadores Técnicos</p>
+            <h3>PMD, medias, RSI, VWAP, POC, ADX, ATR e leitura quant em profundidade</h3>
+            <p class="muted">Cada ativo agora ocupa uma trilha vertical mais limpa, com graficos lado a lado, cards em fileira e leitura explicativa separada.</p>
           </div>
           <div class="timeframe-switch" data-timeframe-group="indicators"></div>
         </div>
       </article>
-      <section id="indicator-assets-grid" class="asset-grid"></section>
+      <section id="indicator-assets-grid" class="indicator-assets-stack"></section>
     </section>
 
     <section class="tab-panel" data-panel="noticias-mercado">
       <article class="panel section-shell">
         <div class="section-topline">
           <div>
-            <p class="eyebrow">Notícias do Mercado Financeiro</p>
-            <h3 id="news-title">Calendario economico e impacto macro</h3>
-            <p id="news-summary" class="muted">Eventos economicos carregados para complementar o vies do MacroFlow e do Jarvis.</p>
+            <p class="eyebrow">🌍 Notícias do Mercado Financeiro</p>
+            <h3 id="news-title">Calendário econômico com impacto e criticidade</h3>
+            <p id="news-summary" class="muted">Eventos econômicos filtrados para complementar o viés operacional do MacroFlow e do Jarvis.</p>
           </div>
           <div class="news-kpi-stack">
             <span id="news-status" class="tag subtle">aguardando</span>
@@ -128,8 +163,8 @@
 
       <article class="panel info-card calendar-toolbar">
         <div>
-          <p class="eyebrow">Filtros</p>
-          <h3>País e criticidade</h3>
+            <p class="eyebrow">🎯 Filtros</p>
+            <h3>País e criticidade</h3>
           <p id="news-source-note" class="muted">Fonte: Trading Economics</p>
         </div>
         <div class="calendar-filters">
@@ -152,22 +187,32 @@
       <section id="economic-calendar-grid" class="calendar-grid"></section>
     </section>
 
+    <section class="tab-panel" data-panel="integridade-dados">
+      <article class="panel section-shell">
+        <div class="section-topline">
+          <div>
+            <p class="eyebrow">🩺 Integridade dos Dados</p>
+            <h3>Data streams, latencia e saude dos feeds do MacroFlow</h3>
+            <p class="muted">Consulte por aqui a disponibilidade das fontes, status da coleta e qualidade do contexto usado pelo motor e pelo Jarvis.</p>
+          </div>
+          <span class="tag subtle">feeds</span>
+        </div>
+      </article>
+      <section id="source-health-list" class="source-health-grid"></section>
+    </section>
+
     <section class="tab-panel" data-panel="configuracoes">
       <article class="panel section-shell">
         <div class="section-topline">
           <div>
-            <p class="eyebrow">Configurações</p>
+            <p class="eyebrow">⚙️ Configurações</p>
             <h3>Parâmetros editáveis do MacroFlow</h3>
-            <p id="settings-note" class="muted">Ajuste o núcleo técnico, risco e timeframes sem sair do dashboard.</p>
+            <p id="settings-note" class="muted">Ajuste o núcleo técnico, risco, calendário e timeframes sem sair do cockpit.</p>
           </div>
           <span class="tag">.env local</span>
         </div>
       </article>
       <form id="settings-form" class="settings-grid"></form>
-      <div class="settings-actions">
-        <button id="save-settings-button" class="primary-button" type="button">Salvar configurações</button>
-        <span id="settings-feedback" class="muted"></span>
-      </div>
     </section>
   </main>
 </div>
@@ -182,13 +227,21 @@
 <section id="jarvis-panel" class="jarvis-panel panel" aria-live="polite">
   <div class="jarvis-header">
     <div>
-      <p class="eyebrow">Jarvis</p>
+      <p class="eyebrow">🤖 Jarvis</p>
       <h3>Trader Quantitativo</h3>
-      <p class="muted">Conversa baseada na última coleta do MacroFlow.</p>
+      <p class="muted">Converse com base na última coleta, no calendário econômico e na leitura quant do MacroFlow.</p>
     </div>
     <button id="jarvis-close" class="icon-button" type="button" aria-label="Fechar Jarvis">×</button>
   </div>
+
+  <div class="jarvis-quick">
+    <button class="suggestion-chip" type="button" data-jarvis-prompt="Qual o viés para o dólar hoje?">💵 Dólar hoje</button>
+    <button class="suggestion-chip" type="button" data-jarvis-prompt="Compare índice e dólar no snapshot atual.">📊 Compare índice x dólar</button>
+    <button class="suggestion-chip" type="button" data-jarvis-prompt="Quais notícias de 3 touros merecem atenção agora?">🌍 Notícias críticas</button>
+  </div>
+
   <div id="jarvis-messages" class="jarvis-messages"></div>
+
   <form id="jarvis-form" class="jarvis-form">
     <input id="jarvis-input" type="text" autocomplete="off" placeholder="Pergunte: qual o viés para WDO agora?" />
     <button class="primary-button" type="submit">Enviar</button>

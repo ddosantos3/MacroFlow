@@ -25,6 +25,7 @@ O frontend local foi reorganizado em abas funcionais:
 - `Configurações`: edição dos parâmetros principais diretamente pela interface, com gravação no `.env`.
 
 O botão `Iniciar Macroflow` agora fica logo abaixo de `Configurações` no menu lateral e recompõe os dados do dashboard sob demanda.
+Os assets estáticos do dashboard (`app.js` e `styles.css`) agora são servidos com versão na URL para evitar cache antigo do navegador após mudanças de interface.
 
 ## O que mudou
 

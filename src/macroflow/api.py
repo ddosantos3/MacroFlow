@@ -15,6 +15,17 @@ from .settings_store import build_settings_payload, reload_settings, update_env_
 from .storage import ArtifactStore
 
 
+def _asset_version(web_root: Path) -> str:
+    tracked_files = (
+        web_root / "static" / "app.js",
+        web_root / "static" / "styles.css",
+        web_root / "templates" / "base.html",
+        web_root / "templates" / "dashboard.html",
+    )
+    latest_mtime = max((path.stat().st_mtime_ns for path in tracked_files if path.exists()), default=0)
+    return str(latest_mtime)
+
+
 def _empty_state(settings: AppSettings) -> dict[str, object]:
     settings_panel = build_settings_payload(settings)
     return {
@@ -106,6 +117,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
             context={
                 "app_name": "MacroFlow",
                 "headline": "Módulos visuais separados para leitura macro, análise gráfica e operação",
+                "asset_version": _asset_version(web_root),
             },
         )
 

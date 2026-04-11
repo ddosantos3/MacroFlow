@@ -48,6 +48,8 @@ def test_root_page_renders_dashboard_shell(tmp_path: Path) -> None:
     assert "Menu Principal" in response.text
     assert "Configurações" in response.text
     assert "jarvis-toggle" in response.text
+    assert "styles.css?v=" in response.text
+    assert "app.js?v=" in response.text
 
 
 def test_settings_endpoint_returns_groups(tmp_path: Path) -> None:
