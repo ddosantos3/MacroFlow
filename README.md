@@ -1,6 +1,8 @@
 # MacroFlow
 
-Atualizacao atual: o MacroFlow agora inclui motor quant deterministico com `VWAP`, `POC`, `ATR`, `Bollinger`, `OBV`, `ADX`, score 0-100, classificacao de regime, risco por volatilidade, relatorio estruturado, alerta automatico por e-mail, calendario economico e chat Jarvis. A camada LLM, quando habilitada, apenas explica os dados e nao decide entrada.
+Atualizacao atual: o MacroFlow agora inclui motor intraday v2 com cadeia de gates deterministica para producao: integridade de dados, contexto/correlacao, estrutura/zona, participacao/fluxo, candle de confirmacao, risco, expectativa positiva e auditoria. Se faltar feed real de 5m/60m, proxy obrigatorio, fluxo/agressao ou probabilidade operacional real do setup, o estado v2 permanece `NO_TRADE`.
+
+O sistema tambem preserva o motor quant deterministico com `VWAP`, `POC`, `ATR`, `Bollinger`, `OBV`, `ADX`, score 0-100, classificacao de regime, risco por volatilidade, relatorio estruturado, alerta automatico por e-mail, calendario economico e chat Jarvis. A camada LLM, quando habilitada, apenas explica os dados e nao decide entrada.
 
 MacroFlow agora é uma plataforma local de inteligência macro + execução disciplinada para trading, com três pilares:
 
@@ -36,6 +38,7 @@ Os assets estáticos do dashboard (`app.js` e `styles.css`) agora são servidos 
 - a persistência agora grava:
   - `data/runtime/dashboard_state.json`
   - `data/runtime/snapshots.jsonl`
+  - `data/runtime/decision_audit.jsonl`
   - `data/runtime/MacroFlow_Dados.xlsx`
 
 ## Arquitetura atual
@@ -67,6 +70,7 @@ Camadas:
 Novos modulos da camada quant e alertas:
 
 - `quant.py`: indicadores avancados, score, regime, regras de entrada/saida e risco por ATR;
+- `intraday_decision.py`: motor decisorio intraday v2 com contrato de producao, gates, fluxo real, sizing por risco, expectativa e auditoria;
 - `llm.py`: explicacao textual opcional com fallback local, sem decidir trade;
 - `emailer.py`: envio SMTP com gatilho por novo sinal ou relatorio diario;
 - `economic_calendar.py`: calendario economico com pais, criticidade, surpresa, projecao e vies macro;
@@ -127,6 +131,20 @@ O e-mail usa `smtplib` e fica desabilitado por padrao. Para ativar, configure `E
 
 O LLM e opcional (`MACROFLOW_LLM_ENABLED=true`) e so gera explicacao textual. O sinal, entrada, stop, alvo e sizing continuam 100% deterministicos.
 
+## Motor decisório intraday v2
+
+O v2 foi separado do motor descritivo/quant para impedir mistura entre leitura analitica e decisao executavel. Ele trabalha com contrato explicito:
+
+- contexto oficial em `60m`;
+- execução oficial em `5m`;
+- proxies obrigatorios `DXY`, `US10Y`, `SPX` e `USD/BRL`;
+- fluxo/agressao real com `AggBuy`, `AggSell` e volume de janela curta;
+- zona operacional pela posicao no range da sessao;
+- filtro de VWAP, EMA9, EMA21, RSI, RVOL/volume financeiro e candle confirmado;
+- stop estrutural, alvo objetivo, `RR >= 2.0`, sizing por risco e expectativa `E=(p*G)-((1-p)*L)`.
+
+Sem esses inputs reais, o v2 nao reaproveita ultimo valor, nao assume neutralidade e nao inventa score: a decisao fica `NO_TRADE` com motivo explicito como `ORDERFLOW_UNAVAILABLE`, `MISSING_PROXY`, `INVALID_TIMEFRAME`, `BAD_PRICE_LOCATION`, `FLOW_NOT_CONFIRMED`, `BAD_RISK_REWARD` ou `MISSING_EXPECTANCY`.
+
 ## Calendario economico e Jarvis
 
 A aba `Noticias do Mercado Financeiro` agora carrega eventos de calendario economico via Fair Economy / Forex Factory por padrao, incluindo pais, categoria, evento, actual, forecast, previous, criticidade em 1, 2 ou 3 touros, surpresa numerica quando disponivel, projecao textual e vies macro estimado. Trading Economics permanece como provider configuravel para quem tiver credencial propria.
@@ -176,6 +194,22 @@ Variáveis principais:
 - `MACROFLOW_VOLUME_SPIKE_FACTOR`
 - `MACROFLOW_ADX_PERIOD`
 - `MACROFLOW_QUANT_RISK_PERCENT`
+- `MACROFLOW_DECISION_AUDIT_PATH`
+- `MACROFLOW_V2_TRADING_START`
+- `MACROFLOW_V2_TRADING_END`
+- `MACROFLOW_V2_NO_TRADE_FIRST_MINUTES`
+- `MACROFLOW_V2_NO_NEW_ENTRIES_BEFORE_CLOSE_MINUTES`
+- `MACROFLOW_V2_MAX_DATA_LATENCY_SECONDS`
+- `MACROFLOW_V2_PROXY_MAX_LATENCY_SECONDS`
+- `MACROFLOW_V2_ORDERFLOW_MAX_LATENCY_SECONDS`
+- `MACROFLOW_V2_MIN_RANGE_BRA50`
+- `MACROFLOW_V2_MIN_RANGE_USDBRL`
+- `MACROFLOW_V2_MIN_RVOL`
+- `MACROFLOW_V2_IMBALANCE_LONG_THRESHOLD`
+- `MACROFLOW_V2_IMBALANCE_SHORT_THRESHOLD`
+- `MACROFLOW_V2_MIN_RISK_REWARD`
+- `MACROFLOW_V2_DEFAULT_RISK_PERCENT`
+- `MACROFLOW_V2_DAILY_RISK_PERCENT`
 - `EMAIL_ENABLED`
 - `EMAIL_HOST`
 - `EMAIL_PORT`
@@ -234,11 +268,13 @@ Arquivos gerados por padrão:
 
 - `data/runtime/dashboard_state.json`
 - `data/runtime/snapshots.jsonl`
+- `data/runtime/decision_audit.jsonl`
 - `data/runtime/MacroFlow_Dados.xlsx`
 
 ## Limitações importantes
 
 - hoje `USDBRL` e `IBOV` ainda são proxies públicos para `WDO/WIN`; não substituem feed real da B3;
+- o motor intraday v2 fica em `NO_TRADE` enquanto o projeto nao receber feed real de candle 5m/60m, proxies intraday monitorados e fluxo/agressao real;
 - `DXY` e `US10Y` continuam em base diária via `FRED`, então a camada macro deve ser lida como filtro institucional, não como feed intraday;
 - sem `FRED_API_KEY`, o sistema vai bloquear por desenho;
 - o dashboard está pronto para uso local, mas a validação em mercado real depende da sua chave, do seu capital configurado e do feed final escolhido.
@@ -254,4 +290,4 @@ Arquivos gerados por padrão:
 - camada macro preservada;
 - dashboard local com design system consistente;
 - README alinhado ao código real;
-- testes cobrindo bloqueio macro, setup técnico e API base.
+- testes cobrindo bloqueio macro, setup técnico, API base e gates criticos do motor intraday v2.

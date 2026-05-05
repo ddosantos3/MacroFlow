@@ -17,10 +17,17 @@ def _safe_sheet_name(name: str) -> str:
 
 
 class ArtifactStore:
-    def __init__(self, excel_path: Path, dashboard_state_path: Path, snapshot_history_path: Path) -> None:
+    def __init__(
+        self,
+        excel_path: Path,
+        dashboard_state_path: Path,
+        snapshot_history_path: Path,
+        decision_audit_path: Path | None = None,
+    ) -> None:
         self.excel_path = excel_path
         self.dashboard_state_path = dashboard_state_path
         self.snapshot_history_path = snapshot_history_path
+        self.decision_audit_path = decision_audit_path or snapshot_history_path.with_name("decision_audit.jsonl")
 
     def save_dashboard_state(self, state: DashboardState | dict[str, Any]) -> None:
         plain = to_plain(state)
@@ -38,6 +45,12 @@ class ArtifactStore:
         plain = to_plain(snapshot)
         _ensure_parent(self.snapshot_history_path)
         with self.snapshot_history_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(plain, ensure_ascii=False, allow_nan=False) + "\n")
+
+    def append_decision_audit(self, cycle: dict[str, Any]) -> None:
+        plain = to_plain(cycle)
+        _ensure_parent(self.decision_audit_path)
+        with self.decision_audit_path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(plain, ensure_ascii=False, allow_nan=False) + "\n")
 
     def save_excel_artifacts(

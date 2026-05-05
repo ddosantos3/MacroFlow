@@ -7,11 +7,12 @@ from .config import (
     ASSET_DESCRIPTIONS,
     ASSET_LABELS,
     ATIVOS_YAHOO,
+    CHART_TIMEFRAME_OPTIONS,
     PASSOS_NIVEIS_FIXOS,
     AppSettings,
     load_settings,
 )
-from .domain import DashboardState, SourceHealth
+from .domain import DashboardState, SourceHealth, to_plain
 from .economic_calendar import fetch_economic_calendar
 from .emailer import processar_alertas_email
 from .indicators import (
@@ -25,6 +26,7 @@ from .indicators import (
     ultimo_valor,
 )
 from .llm import gerar_explicacao_llm
+from .intraday_decision import BlockReason, build_unavailable_intraday_decision, summarize_intraday_decisions
 from .providers import baixar_fred_series, baixar_yahoo, data_mais_recente, timestamp_local
 from .quant import gerar_relatorios_quant, serialize_quant_indicator_frame
 from .settings_store import build_settings_payload
@@ -55,6 +57,70 @@ def _prepare_indicator_frame(frame: pd.DataFrame, settings: AppSettings) -> pd.D
     enriched["EMA_SLOW"] = enriched["PMD"].ewm(span=settings.market.strategy_ema_slow, adjust=False).mean()
     enriched["RSI"] = calcular_rsi(enriched["Close"], settings.market.rsi_period)
     return enriched
+
+
+def timeframe_options_payload() -> list[dict[str, str]]:
+    return [{"value": item["value"], "label": item["label"]} for item in CHART_TIMEFRAME_OPTIONS]
+
+
+def _timeframe_spec(timeframe: str) -> dict[str, str] | None:
+    normalized = str(timeframe or "").upper()
+    return next((item for item in CHART_TIMEFRAME_OPTIONS if item["value"] == normalized), None)
+
+
+def _serialize_chart_payload(label: str, frame: pd.DataFrame, settings: AppSettings) -> dict[str, Any]:
+    if frame.empty:
+        return {
+            "label": label,
+            "available": False,
+            "candles": [],
+            "indicators": [],
+            "quant_indicators": [],
+            "message": "Sem dados reais disponíveis para este tempo gráfico agora.",
+        }
+
+    indicator_frame = _prepare_indicator_frame(frame, settings)
+    return {
+        "label": label,
+        "available": True,
+        "candles": serialize_ohlc(frame),
+        "indicators": serialize_indicator_frame(indicator_frame),
+        "quant_indicators": serialize_quant_indicator_frame(frame, settings),
+        "message": "Dados reais carregados.",
+    }
+
+
+def build_asset_chart_payload(asset: str, timeframe: str, settings: AppSettings) -> dict[str, Any]:
+    normalized_asset = str(asset or "").upper()
+    spec = _timeframe_spec(timeframe)
+    if normalized_asset not in ATIVOS_YAHOO:
+        raise ValueError("Ativo não monitorado pelo MacroFlow.")
+    if spec is None:
+        raise ValueError("Tempo gráfico não suportado.")
+
+    ticker = ATIVOS_YAHOO[normalized_asset]
+    label = str(spec["label"])
+    kind = str(spec["kind"])
+    if kind == "daily":
+        raw = baixar_yahoo(ticker, settings.market.yahoo_daily_period, settings.market.yahoo_daily_interval)
+        frame = preparar_frame_diario(
+            raw,
+            ema_fast=settings.market.strategy_ema_fast,
+            ema_slow=settings.market.strategy_ema_slow,
+            touch_tolerance_pct=settings.market.touch_tolerance_pct,
+        )
+    else:
+        raw = baixar_yahoo(ticker, str(spec["period"]), str(spec["interval"]))
+        frame = resample_para_4h(raw) if kind == "resample_4h" else raw
+
+    chart = _serialize_chart_payload(label, frame, settings)
+    return {
+        "asset": normalized_asset,
+        "timeframe": spec["value"],
+        "label": label,
+        "ok": bool(chart["available"]),
+        "chart": chart,
+    }
 
 
 def _build_market_overview(
@@ -114,7 +180,6 @@ def _build_market_asset_payload(
     quant_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     label = ASSET_LABELS.get(asset, asset)
-    intraday_indicator = _prepare_indicator_frame(intraday_4h, settings)
     preco_atual, _, variacao_pct, volume_4h = calcular_variacao(intraday_4h)
     latest_daily = daily_frame.iloc[-1] if not daily_frame.empty else None
 
@@ -142,19 +207,10 @@ def _build_market_asset_payload(
         "ticker": ticker,
         "description": ASSET_DESCRIPTIONS.get(asset, "Ativo monitorado pelo MacroFlow."),
         "latest": latest_indicators,
+        "timeframe_options": timeframe_options_payload(),
         "charts": {
-            "4H": {
-                "label": "4 horas",
-                "candles": serialize_ohlc(intraday_4h),
-                "indicators": serialize_indicator_frame(intraday_indicator),
-                "quant_indicators": serialize_quant_indicator_frame(intraday_4h, settings),
-            },
-            "1D": {
-                "label": "Diário",
-                "candles": serialize_ohlc(daily_frame),
-                "indicators": serialize_indicator_frame(daily_frame),
-                "quant_indicators": serialize_quant_indicator_frame(daily_frame, settings),
-            },
+            "4H": _serialize_chart_payload("4 Horas", intraday_4h, settings),
+            "1D": _serialize_chart_payload("1 Dia", daily_frame, settings),
         },
         "quant_report": quant_report or {},
         "indicator_notes": [
@@ -189,6 +245,40 @@ def _append_quant_to_snapshot(snapshot: dict[str, Any], reports: list[dict[str, 
     return snapshot
 
 
+def _build_intraday_v2_decisions(generated_at: str, settings: AppSettings) -> list[Any]:
+    reasons = [
+        BlockReason.ORDERFLOW_UNAVAILABLE.value,
+        BlockReason.INVALID_TIMEFRAME.value,
+        BlockReason.MISSING_PROXY.value,
+    ]
+    return [
+        build_unavailable_intraday_decision(asset, generated_at, reasons=reasons, config=settings.intraday)
+        for asset in ("USDBRL", "BRA50")
+    ]
+
+
+def _append_intraday_to_snapshot(snapshot: dict[str, Any], decisions: list[Any]) -> dict[str, Any]:
+    for decision in decisions:
+        prefix = str(decision.asset).lower()
+        snapshot.update(
+            {
+                f"{prefix}_v2_status": decision.entry_status,
+                f"{prefix}_v2_reason": decision.reason,
+                f"{prefix}_v2_allowed_side": decision.allowed_side,
+                f"{prefix}_v2_requested_side": decision.requested_side,
+                f"{prefix}_v2_zone": decision.zone,
+                f"{prefix}_v2_imbalance": decision.imbalance,
+                f"{prefix}_v2_rvol": decision.rvol,
+                f"{prefix}_v2_entry": decision.entry_price,
+                f"{prefix}_v2_stop": decision.stop_price,
+                f"{prefix}_v2_target": decision.target_price,
+                f"{prefix}_v2_risk_reward": decision.risk_reward,
+                f"{prefix}_v2_block_reasons": ",".join(decision.block_reasons),
+            }
+        )
+    return snapshot
+
+
 def _format_quant_terminal(reports: list[dict[str, Any]], email_status: dict[str, Any]) -> str:
     lines = ["QUANT + ALERTAS"]
     for report in reports:
@@ -202,6 +292,17 @@ def _format_quant_terminal(reports: list[dict[str, Any]], email_status: dict[str
         lines.append(f"E-mail: {status} ({reasons})")
     else:
         lines.append("E-mail: desabilitado")
+    return "\n".join(lines)
+
+
+def _format_intraday_terminal(decisions: list[Any]) -> str:
+    lines = ["MOTOR INTRADAY V2"]
+    for decision in decisions:
+        reasons = ", ".join(decision.block_reasons) or decision.reason
+        lines.append(
+            f"{decision.asset} | status {decision.entry_status} | lado {decision.allowed_side} | motivo {reasons}"
+        )
+    lines.append("V2 nao reutiliza score/fallback: sem feed real de fluxo e 5m/60m, permanece NO_TRADE.")
     return "\n".join(lines)
 
 
@@ -231,6 +332,7 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         excel_path=settings.storage.excel_path,
         dashboard_state_path=settings.storage.dashboard_state_path,
         snapshot_history_path=settings.storage.snapshot_history_path,
+        decision_audit_path=settings.storage.decision_audit_path,
     )
 
     generated_at = timestamp_local()
@@ -363,9 +465,12 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         )
 
     email_status = processar_alertas_email(quant_reports, generated_at, settings)
+    intraday_decisions = _build_intraday_v2_decisions(generated_at, settings)
+    operational_metrics = summarize_intraday_decisions(intraday_decisions)
 
     terminal_report = montar_relatorio_terminal(macro_context, decisions)
     terminal_report = f"{terminal_report}\n\n{_format_quant_terminal(quant_reports, email_status)}"
+    terminal_report = f"{terminal_report}\n\n{_format_intraday_terminal(intraday_decisions)}"
     quant_report_map = {report["ativo"]: report for report in quant_reports}
     market_assets = [
         _build_market_asset_payload(
@@ -393,7 +498,9 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
             "blocked": macro_context.nao_operar,
             "excel_path": str(settings.storage.excel_path),
             "default_chart_timeframe": settings.market.chart_default_timeframe,
+            "timeframe_options": timeframe_options_payload(),
             "quant_reports_count": len(quant_reports),
+            "intraday_v2_status": operational_metrics,
             "email_alerts": email_status,
         },
         market_overview=_build_market_overview(generated_at, source_health, settings, macro_context),
@@ -401,13 +508,24 @@ def executar_coleta(settings: AppSettings | None = None) -> dict[str, Any]:
         news_center=_build_news_center(calendar_payload),
         settings_panel=build_settings_payload(settings),
         quant_reports=quant_reports,
+        intraday_decisions=[to_plain(decision) for decision in intraday_decisions],
+        operational_metrics=operational_metrics,
         email_status=email_status,
     )
 
     snapshot = snapshot_from_state(macro_context, decisions, generated_at)
     snapshot = _append_quant_to_snapshot(snapshot, quant_reports)
+    snapshot = _append_intraday_to_snapshot(snapshot, intraday_decisions)
     store.save_excel_artifacts(snapshot, intraday_frames, daily_frames)
     store.append_snapshot_history(snapshot)
+    store.append_decision_audit(
+        {
+            "timestamp_local": generated_at,
+            "rules_version": settings.intraday.rules_version,
+            "decisions": [to_plain(decision) for decision in intraday_decisions],
+            "metrics": operational_metrics,
+        }
+    )
     store.save_dashboard_state(dashboard_state)
 
     logger.info("Estado do dashboard atualizado em %s", settings.storage.dashboard_state_path)
@@ -425,6 +543,7 @@ def gerar_recomendacao(settings: AppSettings | None = None) -> str:
         excel_path=settings.storage.excel_path,
         dashboard_state_path=settings.storage.dashboard_state_path,
         snapshot_history_path=settings.storage.snapshot_history_path,
+        decision_audit_path=settings.storage.decision_audit_path,
     )
     state = store.load_dashboard_state()
     if not state:

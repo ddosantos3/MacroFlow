@@ -26,6 +26,7 @@ def test_dashboard_endpoint_returns_empty_state(tmp_path: Path) -> None:
     assert payload["summary"]["blocked"] is True
     assert payload["macro_context"]["regime"] == "NEUTRO"
     assert payload["settings_panel"]["operational_button_label"] == "Iniciar Macroflow"
+    assert payload["summary"]["timeframe_options"][-1] == {"value": "1M", "label": "1 Minuto"}
 
 
 def test_root_page_renders_dashboard_shell(tmp_path: Path) -> None:
@@ -45,7 +46,11 @@ def test_root_page_renders_dashboard_shell(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "MacroFlow" in response.text
-    assert "Menu Principal" in response.text
+    assert "Resumo" in response.text
+    assert "asset-select" in response.text
+    assert "Visão do Ativo" in response.text
+    assert "Indicadores do ativo" in response.text
+    assert 'data-tab="indicadores-tecnicos"' not in response.text
     assert "Configurações" in response.text
     assert "jarvis-toggle" in response.text
     assert "styles.css?v=" in response.text

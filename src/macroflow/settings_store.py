@@ -5,6 +5,7 @@ from typing import Any
 
 from .config import (
     CalendarConfig,
+    CHART_TIMEFRAME_OPTIONS,
     EmailConfig,
     JarvisConfig,
     LLMConfig,
@@ -15,6 +16,7 @@ from .config import (
     StorageConfig,
     load_settings,
 )
+from .intraday_decision import IntradayDecisionConfig
 
 
 FIELD_GROUPS: list[dict[str, Any]] = [
@@ -133,7 +135,7 @@ FIELD_GROUPS: list[dict[str, Any]] = [
                 "env": "MACROFLOW_CHART_DEFAULT_TIMEFRAME",
                 "label": "Timeframe padrão do dashboard",
                 "type": "select",
-                "options": ["4H", "1D"],
+                "options": [item["value"] for item in CHART_TIMEFRAME_OPTIONS],
                 "help": "Define qual visão o dashboard abre por padrão nas abas gráficas.",
             },
             {
@@ -175,6 +177,28 @@ FIELD_GROUPS: list[dict[str, Any]] = [
             {"env": "MACROFLOW_QUANT_MAX_RISK_PERCENT", "label": "Teto de risco quant", "type": "number", "step": "0.001", "help": "Teto configuravel. O codigo ainda limita a 0.02 por seguranca."},
             {"env": "MACROFLOW_STOP_ATR_MULTIPLE", "label": "Stop em ATR", "type": "number", "step": "0.1", "help": "Multiplicador de ATR para o stop."},
             {"env": "MACROFLOW_TARGET_ATR_MULTIPLE", "label": "Alvo em ATR", "type": "number", "step": "0.1", "help": "Multiplicador de ATR para o alvo."},
+        ],
+    },
+    {
+        "id": "intraday_v2",
+        "title": "Motor Intraday V2",
+        "description": "Gates de producao para contexto 60m, execucao 5m, fluxo real, zona, risco e auditoria.",
+        "fields": [
+            {"env": "MACROFLOW_V2_TRADING_START", "label": "Inicio operacional", "type": "text", "placeholder": "09:05", "help": "Horario local a partir do qual o motor pode avaliar novas entradas."},
+            {"env": "MACROFLOW_V2_TRADING_END", "label": "Fim operacional", "type": "text", "placeholder": "17:25", "help": "Horario local limite para novas decisoes de entrada."},
+            {"env": "MACROFLOW_V2_NO_TRADE_FIRST_MINUTES", "label": "Minutos iniciais bloqueados", "type": "number", "step": "1", "help": "Bloqueia a abertura para evitar decisao sem range real."},
+            {"env": "MACROFLOW_V2_NO_NEW_ENTRIES_BEFORE_CLOSE_MINUTES", "label": "Bloqueio antes do fechamento", "type": "number", "step": "1", "help": "Impede nova posicao perto do encerramento."},
+            {"env": "MACROFLOW_V2_MAX_DATA_LATENCY_SECONDS", "label": "Latencia maxima ativo", "type": "number", "step": "1", "help": "Defasagem maxima aceita para candles do ativo."},
+            {"env": "MACROFLOW_V2_PROXY_MAX_LATENCY_SECONDS", "label": "Latencia maxima proxies", "type": "number", "step": "1", "help": "Defasagem maxima aceita para DXY, US10Y, SPX e USD/BRL."},
+            {"env": "MACROFLOW_V2_ORDERFLOW_MAX_LATENCY_SECONDS", "label": "Latencia maxima fluxo", "type": "number", "step": "1", "help": "Defasagem maxima aceita para agressao compradora/vendedora."},
+            {"env": "MACROFLOW_V2_MIN_RANGE_BRA50", "label": "Range minimo indice", "type": "number", "step": "1", "help": "Range minimo da sessao para liberar decisao no indice."},
+            {"env": "MACROFLOW_V2_MIN_RANGE_USDBRL", "label": "Range minimo dolar", "type": "number", "step": "0.01", "help": "Range minimo da sessao para liberar decisao no dolar."},
+            {"env": "MACROFLOW_V2_MIN_RVOL", "label": "RVOL minimo", "type": "number", "step": "0.01", "help": "Volume relativo minimo no candle de confirmacao."},
+            {"env": "MACROFLOW_V2_IMBALANCE_LONG_THRESHOLD", "label": "Imbalance compra", "type": "number", "step": "0.01", "help": "Desequilibrio minimo para confirmar compra."},
+            {"env": "MACROFLOW_V2_IMBALANCE_SHORT_THRESHOLD", "label": "Imbalance venda", "type": "number", "step": "0.01", "help": "Desequilibrio maximo para confirmar venda."},
+            {"env": "MACROFLOW_V2_MIN_RISK_REWARD", "label": "RR minimo", "type": "number", "step": "0.1", "help": "Relacao risco-retorno minima. Padrao: 2R."},
+            {"env": "MACROFLOW_V2_DEFAULT_RISK_PERCENT", "label": "Risco conservador V2", "type": "number", "step": "0.001", "help": "Padrao conservador para integracoes que nao enviarem risco proprio."},
+            {"env": "MACROFLOW_V2_DAILY_RISK_PERCENT", "label": "Risco diario V2", "type": "number", "step": "0.001", "help": "Teto diario usado no gate de risco."},
         ],
     },
     {
@@ -254,6 +278,21 @@ def _current_value(settings: AppSettings, env_name: str) -> str:
         "MACROFLOW_QUANT_MAX_RISK_PERCENT": settings.quant.max_risk_percent,
         "MACROFLOW_STOP_ATR_MULTIPLE": settings.quant.stop_atr_multiple,
         "MACROFLOW_TARGET_ATR_MULTIPLE": settings.quant.target_atr_multiple,
+        "MACROFLOW_V2_TRADING_START": settings.intraday.trading_start,
+        "MACROFLOW_V2_TRADING_END": settings.intraday.trading_end,
+        "MACROFLOW_V2_NO_TRADE_FIRST_MINUTES": settings.intraday.no_trade_first_minutes,
+        "MACROFLOW_V2_NO_NEW_ENTRIES_BEFORE_CLOSE_MINUTES": settings.intraday.no_new_entries_before_close_minutes,
+        "MACROFLOW_V2_MAX_DATA_LATENCY_SECONDS": settings.intraday.max_data_latency_seconds,
+        "MACROFLOW_V2_PROXY_MAX_LATENCY_SECONDS": settings.intraday.proxy_max_latency_seconds,
+        "MACROFLOW_V2_ORDERFLOW_MAX_LATENCY_SECONDS": settings.intraday.orderflow_max_latency_seconds,
+        "MACROFLOW_V2_MIN_RANGE_BRA50": settings.intraday.min_session_range_by_asset.get("BRA50", ""),
+        "MACROFLOW_V2_MIN_RANGE_USDBRL": settings.intraday.min_session_range_by_asset.get("USDBRL", ""),
+        "MACROFLOW_V2_MIN_RVOL": settings.intraday.min_rvol,
+        "MACROFLOW_V2_IMBALANCE_LONG_THRESHOLD": settings.intraday.imbalance_long_threshold,
+        "MACROFLOW_V2_IMBALANCE_SHORT_THRESHOLD": settings.intraday.imbalance_short_threshold,
+        "MACROFLOW_V2_MIN_RISK_REWARD": settings.intraday.min_risk_reward,
+        "MACROFLOW_V2_DEFAULT_RISK_PERCENT": settings.intraday.default_risk_percent,
+        "MACROFLOW_V2_DAILY_RISK_PERCENT": settings.intraday.daily_risk_percent,
         "EMAIL_ENABLED": str(settings.email.enabled).lower(),
         "EMAIL_HOST": settings.email.host,
         "EMAIL_PORT": settings.email.port,
@@ -396,6 +435,9 @@ def reload_settings(target: AppSettings) -> AppSettings:
                 snapshot_history_path=Path(
                     env_str("MACROFLOW_SNAPSHOT_HISTORY_PATH", str(runtime_dir / "snapshots.jsonl"))
                 ),
+                decision_audit_path=Path(
+                    env_str("MACROFLOW_DECISION_AUDIT_PATH", str(runtime_dir / "decision_audit.jsonl"))
+                ),
             ),
             market=MarketConfig(
                 yahoo_intraday_period=env_yahoo_period("MACROFLOW_YAHOO_INTRADAY_PERIOD", target.market.yahoo_intraday_period),
@@ -452,6 +494,44 @@ def reload_settings(target: AppSettings) -> AppSettings:
                 target_atr_multiple=env_float("MACROFLOW_TARGET_ATR_MULTIPLE", target.quant.target_atr_multiple)
                 or target.quant.target_atr_multiple,
             ),
+            intraday=IntradayDecisionConfig(
+                trading_start=env_str("MACROFLOW_V2_TRADING_START", target.intraday.trading_start),
+                trading_end=env_str("MACROFLOW_V2_TRADING_END", target.intraday.trading_end),
+                no_trade_first_minutes=env_int(
+                    "MACROFLOW_V2_NO_TRADE_FIRST_MINUTES", target.intraday.no_trade_first_minutes
+                ),
+                no_new_entries_before_close_minutes=env_int(
+                    "MACROFLOW_V2_NO_NEW_ENTRIES_BEFORE_CLOSE_MINUTES",
+                    target.intraday.no_new_entries_before_close_minutes,
+                ),
+                max_data_latency_seconds=env_int(
+                    "MACROFLOW_V2_MAX_DATA_LATENCY_SECONDS", target.intraday.max_data_latency_seconds
+                ),
+                proxy_max_latency_seconds=env_int(
+                    "MACROFLOW_V2_PROXY_MAX_LATENCY_SECONDS", target.intraday.proxy_max_latency_seconds
+                ),
+                orderflow_max_latency_seconds=env_int(
+                    "MACROFLOW_V2_ORDERFLOW_MAX_LATENCY_SECONDS", target.intraday.orderflow_max_latency_seconds
+                ),
+                min_rvol=env_float("MACROFLOW_V2_MIN_RVOL", target.intraday.min_rvol)
+                or target.intraday.min_rvol,
+                imbalance_long_threshold=env_float(
+                    "MACROFLOW_V2_IMBALANCE_LONG_THRESHOLD", target.intraday.imbalance_long_threshold
+                )
+                or target.intraday.imbalance_long_threshold,
+                imbalance_short_threshold=env_float(
+                    "MACROFLOW_V2_IMBALANCE_SHORT_THRESHOLD", target.intraday.imbalance_short_threshold
+                )
+                or target.intraday.imbalance_short_threshold,
+                min_risk_reward=env_float("MACROFLOW_V2_MIN_RISK_REWARD", target.intraday.min_risk_reward)
+                or target.intraday.min_risk_reward,
+                default_risk_percent=env_float(
+                    "MACROFLOW_V2_DEFAULT_RISK_PERCENT", target.intraday.default_risk_percent
+                )
+                or target.intraday.default_risk_percent,
+                daily_risk_percent=env_float("MACROFLOW_V2_DAILY_RISK_PERCENT", target.intraday.daily_risk_percent)
+                or target.intraday.daily_risk_percent,
+            ),
             email=EmailConfig(
                 enabled=env_bool("EMAIL_ENABLED", target.email.enabled),
                 host=env_str("EMAIL_HOST", target.email.host),
@@ -489,9 +569,24 @@ def reload_settings(target: AppSettings) -> AppSettings:
             host=env_str("MACROFLOW_HOST", target.host),
             port=env_int("MACROFLOW_PORT", target.port),
         )
+        fresh.intraday.min_session_range_by_asset.update(
+            {
+                "BRA50": env_float(
+                    "MACROFLOW_V2_MIN_RANGE_BRA50",
+                    target.intraday.min_session_range_by_asset.get("BRA50", 250.0),
+                )
+                or target.intraday.min_session_range_by_asset.get("BRA50", 250.0),
+                "USDBRL": env_float(
+                    "MACROFLOW_V2_MIN_RANGE_USDBRL",
+                    target.intraday.min_session_range_by_asset.get("USDBRL", 0.01),
+                )
+                or target.intraday.min_session_range_by_asset.get("USDBRL", 0.01),
+            }
+        )
     target.storage = fresh.storage
     target.market = fresh.market
     target.quant = fresh.quant
+    target.intraday = fresh.intraday
     target.email = fresh.email
     target.llm = fresh.llm
     target.calendar = fresh.calendar

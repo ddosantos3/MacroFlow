@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Tuple
 
+from .intraday_decision import IntradayDecisionConfig
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,6 +61,7 @@ class StorageConfig:
     excel_path: Path = PROJECT_ROOT / "data" / "runtime" / "MacroFlow_Dados.xlsx"
     dashboard_state_path: Path = PROJECT_ROOT / "data" / "runtime" / "dashboard_state.json"
     snapshot_history_path: Path = PROJECT_ROOT / "data" / "runtime" / "snapshots.jsonl"
+    decision_audit_path: Path = PROJECT_ROOT / "data" / "runtime" / "decision_audit.jsonl"
 
 
 @dataclass(slots=True)
@@ -154,6 +157,7 @@ class AppSettings:
     storage: StorageConfig = field(default_factory=StorageConfig)
     market: MarketConfig = field(default_factory=MarketConfig)
     quant: QuantConfig = field(default_factory=QuantConfig)
+    intraday: IntradayDecisionConfig = field(default_factory=IntradayDecisionConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
@@ -198,6 +202,17 @@ PASSOS_NIVEIS_FIXOS: Dict[str, Tuple[float, int]] = {
 }
 
 
+CHART_TIMEFRAME_OPTIONS = [
+    {"value": "1D", "label": "1 Dia", "period": "1y", "interval": "1d", "kind": "daily"},
+    {"value": "4H", "label": "4 Horas", "period": "60d", "interval": "60m", "kind": "resample_4h"},
+    {"value": "1H", "label": "1 Hora", "period": "60d", "interval": "60m", "kind": "intraday"},
+    {"value": "30M", "label": "30 Minutos", "period": "30d", "interval": "30m", "kind": "intraday"},
+    {"value": "15M", "label": "15 Minutos", "period": "30d", "interval": "15m", "kind": "intraday"},
+    {"value": "5M", "label": "5 Minutos", "period": "10d", "interval": "5m", "kind": "intraday"},
+    {"value": "1M", "label": "1 Minuto", "period": "7d", "interval": "1m", "kind": "intraday"},
+]
+
+
 def load_settings() -> AppSettings:
     _load_project_dotenv()
     storage = StorageConfig()
@@ -209,6 +224,9 @@ def load_settings() -> AppSettings:
     ).expanduser()
     storage.snapshot_history_path = Path(
         _env_str("MACROFLOW_SNAPSHOT_HISTORY_PATH", str(runtime_dir / "snapshots.jsonl"))
+    ).expanduser()
+    storage.decision_audit_path = Path(
+        _env_str("MACROFLOW_DECISION_AUDIT_PATH", str(runtime_dir / "decision_audit.jsonl"))
     ).expanduser()
 
     market = MarketConfig(
@@ -254,6 +272,32 @@ def load_settings() -> AppSettings:
         stop_atr_multiple=_env_float("MACROFLOW_STOP_ATR_MULTIPLE") or 2.0,
         target_atr_multiple=_env_float("MACROFLOW_TARGET_ATR_MULTIPLE") or 3.0,
     )
+    intraday = IntradayDecisionConfig(
+        trading_start=_env_str("MACROFLOW_V2_TRADING_START", "09:05"),
+        trading_end=_env_str("MACROFLOW_V2_TRADING_END", "17:25"),
+        no_trade_first_minutes=_env_int("MACROFLOW_V2_NO_TRADE_FIRST_MINUTES", 5),
+        no_new_entries_before_close_minutes=_env_int("MACROFLOW_V2_NO_NEW_ENTRIES_BEFORE_CLOSE_MINUTES", 10),
+        max_data_latency_seconds=_env_int("MACROFLOW_V2_MAX_DATA_LATENCY_SECONDS", 90),
+        proxy_max_latency_seconds=_env_int("MACROFLOW_V2_PROXY_MAX_LATENCY_SECONDS", 600),
+        orderflow_max_latency_seconds=_env_int("MACROFLOW_V2_ORDERFLOW_MAX_LATENCY_SECONDS", 30),
+        min_rvol=_env_float("MACROFLOW_V2_MIN_RVOL") or 1.20,
+        imbalance_long_threshold=_env_float("MACROFLOW_V2_IMBALANCE_LONG_THRESHOLD") or 0.15,
+        imbalance_short_threshold=_env_float("MACROFLOW_V2_IMBALANCE_SHORT_THRESHOLD") or -0.15,
+        min_risk_reward=_env_float("MACROFLOW_V2_MIN_RISK_REWARD") or 2.0,
+        weak_bias_threshold=_env_float("MACROFLOW_V2_WEAK_BIAS_THRESHOLD") or 0.25,
+        strong_bias_threshold=_env_float("MACROFLOW_V2_STRONG_BIAS_THRESHOLD") or 0.80,
+        max_stop_atr_multiple=_env_float("MACROFLOW_V2_MAX_STOP_ATR_MULTIPLE") or 2.5,
+        default_risk_percent=_env_float("MACROFLOW_V2_DEFAULT_RISK_PERCENT") or 0.005,
+        daily_risk_percent=_env_float("MACROFLOW_V2_DAILY_RISK_PERCENT") or 0.02,
+        max_trades_per_asset=_env_int("MACROFLOW_V2_MAX_TRADES_PER_ASSET", 3),
+        max_consecutive_losses=_env_int("MACROFLOW_V2_MAX_CONSECUTIVE_LOSSES", 2),
+    )
+    intraday.min_session_range_by_asset.update(
+        {
+            "BRA50": _env_float("MACROFLOW_V2_MIN_RANGE_BRA50") or intraday.min_session_range_by_asset["BRA50"],
+            "USDBRL": _env_float("MACROFLOW_V2_MIN_RANGE_USDBRL") or intraday.min_session_range_by_asset["USDBRL"],
+        }
+    )
     email = EmailConfig(
         enabled=_env_bool("EMAIL_ENABLED", False),
         host=_env_str("EMAIL_HOST", "smtp.gmail.com"),
@@ -296,6 +340,7 @@ def load_settings() -> AppSettings:
         storage=storage,
         market=market,
         quant=quant,
+        intraday=intraday,
         email=email,
         llm=llm,
         calendar=calendar,

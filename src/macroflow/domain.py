@@ -107,6 +107,8 @@ class DashboardState:
     news_center: dict[str, Any] = field(default_factory=dict)
     settings_panel: dict[str, Any] = field(default_factory=dict)
     quant_reports: list[dict[str, Any]] = field(default_factory=list)
+    intraday_decisions: list[dict[str, Any]] = field(default_factory=list)
+    operational_metrics: dict[str, Any] = field(default_factory=dict)
     email_status: dict[str, Any] = field(default_factory=dict)
 
 

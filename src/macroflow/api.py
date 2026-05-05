@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from .config import AppSettings, load_settings
 from .domain import to_plain
 from .jarvis import generate_jarvis_reply
-from .pipeline import executar_coleta
+from .pipeline import build_asset_chart_payload, executar_coleta, timeframe_options_payload
 from .settings_store import build_settings_payload, reload_settings, update_env_file
 from .storage import ArtifactStore
 
@@ -36,6 +36,7 @@ def _empty_state(settings: AppSettings) -> dict[str, object]:
             "has_actionable_trade": False,
             "excel_path": str(settings.storage.excel_path),
             "default_chart_timeframe": settings.market.chart_default_timeframe,
+            "timeframe_options": timeframe_options_payload(),
             "quant_reports_count": 0,
             "email_alerts": {"enabled": settings.email.enabled, "sent": False, "reasons": []},
         },
@@ -92,6 +93,15 @@ def _empty_state(settings: AppSettings) -> dict[str, object]:
         },
         "settings_panel": settings_panel,
         "quant_reports": [],
+        "intraday_decisions": [],
+        "operational_metrics": {
+            "decisions_count": 0,
+            "entries_count": 0,
+            "entry_rate": 0.0,
+            "status_counts": {},
+            "block_reason_counts": {},
+            "rules_version": settings.intraday.rules_version,
+        },
         "email_status": {"enabled": settings.email.enabled, "sent": False, "reasons": []},
     }
 
@@ -102,6 +112,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         excel_path=settings.storage.excel_path,
         dashboard_state_path=settings.storage.dashboard_state_path,
         snapshot_history_path=settings.storage.snapshot_history_path,
+        decision_audit_path=settings.storage.decision_audit_path,
     )
 
     app = FastAPI(title="MacroFlow", version="2.1.0")
@@ -124,7 +135,16 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     @app.get("/api/dashboard")
     async def dashboard_state() -> JSONResponse:
         state = store.load_dashboard_state() or _empty_state(settings)
+        state.setdefault("summary", {}).setdefault("timeframe_options", timeframe_options_payload())
         return JSONResponse(state)
+
+    @app.get("/api/assets/{asset}/chart")
+    async def asset_chart(asset: str, timeframe: str = "4H") -> JSONResponse:
+        try:
+            payload = build_asset_chart_payload(asset, timeframe, settings)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload)
 
     @app.post("/api/refresh")
     async def refresh_state() -> JSONResponse:
@@ -171,6 +191,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
                 "has_state": bool(state),
                 "excel_path": str(settings.storage.excel_path),
                 "dashboard_state_path": str(settings.storage.dashboard_state_path),
+                "decision_audit_path": str(settings.storage.decision_audit_path),
             }
         )
 
